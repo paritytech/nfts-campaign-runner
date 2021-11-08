@@ -1,0 +1,33 @@
+{
+  "network": {
+    "provider": "",
+    "accountSeed": "",
+    "proxiedAddress": ""
+  },
+  "pinata": {
+    "apiKey": "",
+    "secretApiKey": ""
+  },
+  "class": {
+    "id": "",
+    "append": "no",
+    "metadata": {
+      "imageFile": "",
+      "name": "",
+      "description": ""
+    }
+  },
+  "instance": {
+    "data": {
+      "csvFile": "",
+      "offset": "",
+      "count": ""
+    },
+    "initialFund": "",
+    "metadata": {
+      "imageFolder": "",
+      "name": "",
+      "description": ""
+    }
+  }
+}
