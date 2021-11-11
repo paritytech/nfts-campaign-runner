@@ -1,7 +1,9 @@
-const { connect } = require('./chain/chain');
+const { connect } = require('../chain/chain');
 const { signAndSendTx } = require('../chain/txHandler');
-const wfSetting = require('./workflow.json');
+const wfSetting = require('../workflow.json');
+const fs = require('fs');
 const path = require('path');
+
 const pinFile = require('../pinata/pinFile');
 
 let createMataJson = (name, imageCid) => {
@@ -13,37 +15,50 @@ let createMataJson = (name, imageCid) => {
   return JSON.stringify(metadata, null, 2);
 };
 
-const generateMetaData = async (name, description, imageFile, ipfsName) => {
-  if (!wfSetting?.class?.metadata) {
-    // pin image
-    let imagePath = path.resolve(imageFile);
-    let { dir, name } = path.parse(imagePath);
-    let metaPath = path.join(dir, `${name}.meta`);
-    let pinResult = pinFile(imagePath, `${ipfsName}.image`);
-    let imageCid = pinResult?.IpfsHash;
-    if (!cid) {
-      throw new Error(`failed to pin image.`);
-    }
-
-    // create metatdata
-    let metadata = {
-      name: name,
-      image: `ipfs://ipfs/${imageCid}`,
-      description: description,
-    };
-    let metadat = JSON.stringify(metadata, null, 2);
-
-    // pin metadata
-    let pinResult = pinFile(imagePath, `${ipfsName}.meta`);
-    let metaCid = pinResult?.IpfsHash;
-    if (!cid) {
-      throw new Error(`failed to pin metadata`);
-    }
-    fs.writeFileSync(outputFile, metadata, { encoding: 'utf8' });
+const generateMetadata = async (name, description, imageFile) => {
+  // pin image
+  let imagePath = path.resolve(imageFile);
+  if (!fs.existsSync(imagePath)) {
+    throw new Error(
+      `the configured class image path: ${imagePath} does not exist`
+    );
   }
+  if (!fs.statSync(imagePath)?.isFile()) {
+    throw new Error(
+      `the configured class image path: ${imagePath} is not a file`
+    );
+  }
+  let { dir, name: fname } = path.parse(imagePath);
+  let metaPath = path.join(dir, `${fname}.meta`);
+
+  let imagePinResult = await pinFile(imagePath, `${fname}.image`);
+  let imageCid = imagePinResult?.IpfsHash;
+  if (!imageCid) {
+    throw new Error(`failed to pin image.`);
+  }
+
+  // create metatdata
+  let metadata = {
+    name: name,
+    image: `ipfs://ipfs/${imageCid}`,
+    description: description,
+  };
+
+  let metadataStr = JSON.stringify(metadata, null, 2);
+
+  // save matadat in the file
+  fs.writeFileSync(metaPath, metadataStr, { encoding: 'utf8' });
+
+  // pin metadata
+  let metaPinResult = await pinFile(metaPath, `${fname}.meta`);
+  let metaCid = metaPinResult?.IpfsHash;
+  if (!metaCid) {
+    throw new Error(`failed to pin metadata`);
+  }
+  return metaCid;
 };
 
-let setClassMetaData = async (classId, metadataCid) => {
+let setClassMetadata = async (classId, metadataCid) => {
   const { api, signingPair, proxiedAddress } = await connect();
   let tx = api.tx.uniques.setClassMetadata(classId, metadataCid, false);
 
@@ -70,7 +85,10 @@ const generateAndSetClassMetadata = async () => {
     }
   } else {
     let { name, description, imageFile } = wfSetting?.class?.metadata;
-    let classMetaCid = generateMetaData(name, description, imageFile, metaName);
+    let classMetaCid = await generateMetadata(name, description, imageFile);
     await setClassMetadata(wfSetting?.class?.id, classMetaCid);
+    return classMetaCid;
   }
 };
+
+module.exports = { generateAndSetClassMetadata };

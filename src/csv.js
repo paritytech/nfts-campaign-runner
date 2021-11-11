@@ -1,8 +1,8 @@
 const fs = require('fs');
 const syncCsvParse = require('csv-parse/lib/sync');
 const readCsvSync = (file, hasHeader = true) => {
-  const data = fs.readFileSync(input);
-  const header = [];
+  const data = fs.readFileSync(file);
+  let header = [];
 
   let records = syncCsvParse(data, {
     skip_empty_lines: true,
@@ -18,8 +18,9 @@ const readCsvSync = (file, hasHeader = true) => {
   return { header, records };
 };
 
-const writeCsvSync = (records, file) => {
-  let csvRecords = records.join('/n');
+const writeCsvSync = (file, headers, records) => {
+  let data = [headers, ...records];
+  let csvRecords = data.join('\n');
   fs.writeFileSync(file, csvRecords);
 };
 
