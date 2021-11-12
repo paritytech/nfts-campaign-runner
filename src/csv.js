@@ -26,14 +26,15 @@ const writeCsvSync = (file, headers, records) => {
 
 const getColumnIndex = (header, columns) => {
   let indexes = {};
-  columns
-    .filter((col) => col)
-    .forEach((col) => {
+  columns.forEach((col) => {
+    if (!col) {
+      indexes.push(null);
+    } else {
       let idx = header.indexOf(col);
-      if (idx !== -1) {
-        indexes[col] = idx;
-      }
-    });
+      idx = idx === -1 ? null : idx;
+      indexes.push(idx);
+    }
+  });
   return indexes;
 };
 

@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const { writeCsvSync, readCsvSync, getColumnIndex } = require('./csv');
 const { generateAndSetClassMetadata } = require('./scripts/metadata');
+const { addGiftSecretsToFile } = require('./scripts/giftSecrets');
 
 const { connect } = require('./chain/chain');
 const wfSetting = require('./workflow.json');
@@ -26,10 +27,11 @@ const runWorkflow = async () => {
     // the class has already been created
     const { header: classHeader, records: classRecords } =
       readCsvSync(classCheckpoint);
-    const { classIdIndex } = getColumnIndex(classHeader, ['classId']);
-    if (classIdIndex && wfSetting.class?.id == classRecords[0][classIdIndex])
+    const [classIdIndex] = getColumnIndex(classHeader, ['classId']);
+    if (classIdIndex && wfSetting.class?.id == classRecords[0][classIdIndex]) {
       // classId exists and is valid
       classId = classRecords[0][classIdIndex];
+    }
   }
 
   // if a valid class is not already created does not exist, create the class
@@ -70,7 +72,7 @@ const runWorkflow = async () => {
     // a class checkpoint already exists check if the metadata is already created
     let { header: classHeader, records: classRecords } =
       readCsvSync(classCheckpoint);
-    let { classMetaIndex } = getColumnIndex(classHeader, ['classMetadata']);
+    let [classMetaIndex] = getColumnIndex(classHeader, ['classMetadata']);
     if (!classMetaIndex || !classRecords[0]?.[classMetaIndex]) {
       // class metadata does not exist in the checkpoint
       let classMetadata = await generateAndSetClassMetadata();
@@ -88,6 +90,32 @@ const runWorkflow = async () => {
   }
 
   // 3-create nft secrets + addresses
+  let datafile = wfSetting?.instance?.data?.csvFile;
+  if (!datafile) {
+    throw new Error(
+      'The data source is not configured. Please configure instance.data.csvFile in your workflow.json'
+    );
+  }
+  if (!fs.existsSync(datafile)) {
+    throw new Error(
+      `The configured datafile does not exists. Please check if path: ${datafile} exists`
+    );
+  }
+  // copy file to checkpoint
+  let dataCheckpoint = path.join(__dirname, `${checkpointPath}/.data.cp`);
+  if (!fs.existsSync(dataCheckpoint)) {
+    fs.copyFileSync(datafile, dataCheckpoint);
+  }
+  const { header: dataHeader, records: dataRecords } =
+    readCsvSync(dataCheckpoint);
+  let shouldGenerateSecrets = true;
+  const [addressIndex] = getColumnIndex(dataHeader, ['gift account address']);
+  if (addressIndex) {
+    shouldGenerateSecrets = false;
+  }
+  if (shouldGenerateSecrets) {
+    generateGiftSecrets(dataCheckpoint);
+  }
 };
 
 runWorkflow()
