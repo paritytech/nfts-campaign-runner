@@ -1,10 +1,10 @@
-const { connect } = require('../chain/chain');
-const { signAndSendTx } = require('../chain/txHandler');
-const wfSetting = require('../workflow.json');
+const { connect } = require('./chain/chain');
+const { signAndSendTx } = require('./chain/txHandler');
+const wfSetting = require('./workflow.json');
 const fs = require('fs');
 const path = require('path');
 
-const pinFile = require('../pinata/pinFile');
+const pinFile = require('./pinata/pinFile');
 
 let createMataJson = (name, imageCid) => {
   let metadata = {

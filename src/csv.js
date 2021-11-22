@@ -25,7 +25,7 @@ const writeCsvSync = (file, headers, records) => {
 };
 
 const getColumnIndex = (header, columns) => {
-  let indexes = {};
+  let indexes = [];
   columns.forEach((col) => {
     if (!col) {
       indexes.push(null);
