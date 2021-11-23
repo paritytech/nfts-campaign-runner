@@ -5,21 +5,13 @@ const { writeCsvSync, readCsvSync, getColumnIndex } = require('./csv');
 const { generateAndSetClassMetadata } = require('./metadata');
 const { generateSecret } = require('./giftSecrets');
 const { mintClassInstances } = require('./mint');
+const { headerTitles, checkpointFiles } = require('./checkpoint');
 
 const { connect } = require('./chain/chain');
 const wfSetting = require('./workflow.json');
 const { signAndSendTx } = require('./chain/txHandler');
 
-const checkpointPath = './';
 const inqAsk = inquirer.createPromptModule();
-
-const headerTitles = {
-  classId: 'classId',
-  classMetadata: 'classMetadata',
-  secret: 'gift account secret',
-  address: 'gift account address',
-  lastBatch: 'last minted batch number',
-};
 
 const runWorkflow = async () => {
   // load the csv file with the required columns (first name, last name, email ), fail if columns are missing
@@ -27,7 +19,7 @@ const runWorkflow = async () => {
   let { api, signingPair } = await connect();
 
   // 1- create class
-  let classCheckpoint = path.join(__dirname, `${checkpointPath}/.class.cp`);
+  let classCheckpoint = checkpointFiles.class;
   let classId;
   let appendToClass;
   if (!wfSetting.class?.id) {
@@ -82,7 +74,6 @@ const runWorkflow = async () => {
   }
 
   // 2-generate/set class metadata
-  let classMeta;
   if (fs.existsSync(classCheckpoint)) {
     // a class checkpoint already exists check if the metadata is already created
     let { header: classHeader, records: classRecords } =
@@ -119,7 +110,7 @@ const runWorkflow = async () => {
     );
   }
   // copy file to checkpoint path if checkpoiint does not already exist
-  let dataCheckpoint = path.join(__dirname, `${checkpointPath}/.data.cp`);
+  let dataCheckpoint = checkpointFiles.data;
   if (!fs.existsSync(dataCheckpoint)) {
     fs.copyFileSync(datafile, dataCheckpoint);
   }
@@ -178,7 +169,7 @@ const runWorkflow = async () => {
   let batchSize = parseInt(wfSetting?.instance?.batchSize) || 100;
   let { instances: startInstanceId } = await api.query.uniques.class(classId);
   let lastBatch = 0;
-  let mintCheckpoint = path.join(__dirname, `${checkpointPath}/.mint.cp`);
+  let mintCheckpoint = checkpointFiles.mint;
   if (fs.existsSync(mintCheckpoint)) {
     // the class has already been created
     const { header: mintHeader, records: mintRecords } =
@@ -212,6 +203,30 @@ const runWorkflow = async () => {
     console.log(`Batch number ${lastBatch} was minted successfully`);
     writeCsvSync(mintCheckpoint, [headerTitles.lastBatch], [[lastBatch]]);
   }
+
+  //5- set metadata for instances
+  /*if (fs.existsSync(dataCheckpoint)) {
+    // a class checkpoint already exists check if the metadata is already created
+    let { header: classHeader, records: classRecords } =
+      readCsvSync(dataCheckpoint);
+    let [instanceMetaIndex] = getColumnIndex(classHeader, [
+      headerTitles.instanceMetadata,
+    ]);
+    if (!classMetaIndex || !classRecords[0]?.[classMetaIndex]) {
+      // class metadata does not exist in the checkpoint
+      let classMetadata = await generateAndSetClassMetadata();
+      if (classMetadata) {
+        // new metadata is created add it to the checkpoint
+        if (classMetaIndex == null) {
+          classHeader.push(headerTitles.classMetadata);
+          classMetaIndex = classHeader.length - 1;
+        }
+        classRecords[0][classMetaIndex] = classMetadata;
+        console.log({ classCheckpoint, classHeader, classRecords });
+        writeCsvSync(classCheckpoint, classHeader, classRecords);
+      }
+    }
+  }*/
 };
 
 runWorkflow()

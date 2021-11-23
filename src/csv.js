@@ -1,5 +1,6 @@
 const fs = require('fs');
 const syncCsvParse = require('csv-parse/lib/sync');
+
 const readCsvSync = (file, hasHeader = true) => {
   const data = fs.readFileSync(file);
   let header = [];
@@ -38,4 +39,4 @@ const getColumnIndex = (header, columns) => {
   return indexes;
 };
 
-module.exports = { readCsvSync, writeCsvSync, getColumnIndex };
+module.exports = { readCsvSync, writeCsvSync, getColumnIndex, headerTitles };

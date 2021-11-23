@@ -55,7 +55,18 @@ const generateMetadata = async (name, description, imageFile) => {
   if (!metaCid) {
     throw new Error(`failed to pin metadata`);
   }
-  return metaCid;
+  return { metaCid, imageCid };
+};
+
+let setMetadataInBatch = async (classId, instanceId, metadataCid) => {
+  const { api, signingPair, proxiedAddress } = await connect();
+  let tx = api.tx.uniques.setMetadata(classId, instanceId, metadataCid, false);
+
+  let txCall = proxiedAddress
+    ? api.tx.proxy.proxy(proxiedAddress, 'Assets', tx)
+    : tx;
+  console.log(`sending tx with hash ${tx.toHex()}`);
+  await signAndSendTx(api, txCall, signingPair);
 };
 
 let setClassMetadata = async (classId, metadataCid) => {
@@ -69,26 +80,15 @@ let setClassMetadata = async (classId, metadataCid) => {
   await signAndSendTx(api, txCall, signingPair);
 };
 
-const generateAndSetClassMetadata = async () => {
-  if (!wfSetting?.class?.metadata) {
-    // no class metdata is configured. ask user if they want to configure a class metadata
-    let { withoutMetadata } = (await inqAsk([
-      {
-        type: 'confirm',
-        name: 'withoutMetadata',
-        message: `No class metadata is configured in workflow.json, do you want to continue without setting class metadata`,
-        default: false,
-      },
-    ])) || { withoutMetadata: false };
-    if (!withoutMetadata) {
-      throw new Error('Please configure a class metadata in workflow.json.');
-    }
-  } else {
-    let { name, description, imageFile } = wfSetting?.class?.metadata;
-    let classMetaCid = await generateMetadata(name, description, imageFile);
-    await setClassMetadata(wfSetting?.class?.id, classMetaCid);
-    return classMetaCid;
-  }
+const generateAndSetClassMetadata = async (classId, metedate) => {
+  let { name, description, imageFile } = metadata;
+  let { metaCid } = await generateMetadata(name, description, imageFile);
+  await setClassMetadata(classid, metaCid);
+  return metaCid;
 };
 
-module.exports = { generateAndSetClassMetadata };
+module.exports = {
+  generateAndSetClassMetadata,
+  setInstanceMetadata,
+  generateMetadata,
+};
