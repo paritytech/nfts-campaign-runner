@@ -2,7 +2,11 @@ const inquirer = require('inquirer');
 const fs = require('fs');
 const path = require('path');
 const { writeCsvSync, readCsvSync, getColumnIndex } = require('./csv');
-const { generateAndSetClassMetadata, generateMetadata } = require('./metadata');
+const {
+  generateAndSetClassMetadata,
+  generateMetadata,
+  setMetadataInBatch,
+} = require('./metadata');
 const { generateSecret } = require('./giftSecrets');
 const { mintClassInstances } = require('./mint');
 const { headerTitles, checkpointFiles } = require('./checkpoint');
@@ -13,11 +17,12 @@ const { signAndSendTx } = require('./chain/txHandler');
 
 const inqAsk = inquirer.createPromptModule();
 
-const startRecordNo = 0;
-const endRecordNo = -1;
+let startRecordNo = 0;
+let endRecordNo = -1;
 
-// 1- create class
 const createClass = async () => {
+  // 1- create class
+  const { api, signingPair, proxiedAddress } = await connect();
   let classCheckpoint = checkpointFiles.class;
   let classId;
   if (!wfSetting.class?.id) {
@@ -71,61 +76,60 @@ const createClass = async () => {
   }
 };
 
-// 2-generate/set class metadata
 const setClassMetadata = async () => {
+  // 2-generate/set class metadata
+
+  // read classId from checkpoint
   let classCheckpoint = checkpointFiles.class;
-  if (fs.existsSync(classCheckpoint)) {
-    // a class checkpoint already exists check if the metadata is already created
-    let { header: classHeader, records: classRecords } =
-      readCsvSync(classCheckpoint);
-    let [classIdIndex, classMetaIndex] = getColumnIndex(classHeader, [
-      headerTitles.classId,
-      headerTitles.classMetadata,
-    ]);
-    if (!classId) {
-      throw new Error(
-        'No classId is recorded in checkpoint, Class is not created or the class checkpoint is not recorded correctly or maybe compromised.'
-      );
-    }
-    if (!classMetaIndex || !classRecords[0]?.[classMetaIndex]) {
-      // no class metadata is recorded in the checkpoint
-      let metadata = wfSetting?.class?.metadata;
-      if (!metadata) {
-        // no class metdata is configured. ask user if they want to configure a class metadata
-        let { withoutMetadata } = (await inqAsk([
-          {
-            type: 'confirm',
-            name: 'withoutMetadata',
-            message: `No class metadata is configured in workflow.json, do you want to continue without setting class metadata`,
-            default: false,
-          },
-        ])) || { withoutMetadata: false };
-        if (!withoutMetadata) {
-          throw new Error(
-            'Please configure a class metadata in workflow.json.'
-          );
-        } else {
-          let classMetadata = await generateAndSetClassMetadata(
-            classId,
-            metadata
-          );
-          if (classMetadata) {
-            // new metadata is created add it to the checkpoint
-            if (classMetaIndex == null) {
-              classHeader.push(headerTitles.classMetadata);
-              classMetaIndex = classHeader.length - 1;
-            }
-            classRecords[0][classMetaIndex] = classMetadata;
-            console.log({ classCheckpoint, classHeader, classRecords });
-            writeCsvSync(classCheckpoint, classHeader, classRecords);
-          }
+  let classId;
+  if (!fs.existsSync(classCheckpoint)) {
+    throw new Error('No class checkpoint is recorded');
+  }
+  let { header: classHeader, records: classRecords } =
+    readCsvSync(classCheckpoint);
+  let [classIdIndex, classMetaIndex] = getColumnIndex(classHeader, [
+    headerTitles.classId,
+    headerTitles.classMetadata,
+  ]);
+  if (classIdIndex || classRecords[0]?.[classIdIndex]) {
+    classId = classRecords[0][classIdIndex];
+  }
+
+  if (classId == null) {
+    throw new Error(
+      'No classId checkpoint is recorded or the checkpoint is not in correct state'
+    );
+  }
+
+  if (!classMetaIndex || !classRecords[0]?.[classMetaIndex]) {
+    // no class metadata is recorded in the checkpoint
+    let metadata = wfSetting?.class?.metadata;
+    if (!metadata) {
+      // no class metdata is configured. ask user if they want to configure a class metadata
+      let { withoutMetadata } = (await inqAsk([
+        {
+          type: 'confirm',
+          name: 'withoutMetadata',
+          message: `No class metadata is configured in workflow.json, do you want to continue without setting class metadata`,
+          default: false,
+        },
+      ])) || { withoutMetadata: false };
+      if (!withoutMetadata) {
+        throw new Error('Please configure a class metadata in workflow.json.');
+      }
+    } else {
+      let classMetadata = await generateAndSetClassMetadata(classId, metadata);
+      if (classMetadata) {
+        // new metadata is created add it to the checkpoint
+        if (classMetaIndex == null) {
+          classHeader.push(headerTitles.classMetadata);
+          classMetaIndex = classHeader.length - 1;
         }
+        classRecords[0][classMetaIndex] = classMetadata;
+        console.log({ classCheckpoint, classHeader, classRecords });
+        writeCsvSync(classCheckpoint, classHeader, classRecords);
       }
     }
-  } else {
-    throw new Error(
-      'No class checkpoint was found, The class is not created or the class checkpoint is not recorded correctly.'
-    );
   }
 };
 
@@ -197,10 +201,49 @@ const generateGiftSecrets = async () => {
 
 const mintInstancesInBatch = async () => {
   //4- mint instances in batch
+  const { api, signingPair, proxiedAddress } = await connect();
+
+  // read classId from checkpoint
+  let classCheckpoint = checkpointFiles.class;
+  let classId;
+  if (fs.existsSync(classCheckpoint)) {
+    let { header: classHeader, records: classRecords } =
+      readCsvSync(classCheckpoint);
+    let [classIdIndex] = getColumnIndex(classHeader, [headerTitles.classId]);
+    if (classIdIndex || classRecords[0]?.[classIdIndex]) {
+      classId = classRecords[0][classIdIndex];
+    }
+  }
+  if (classId == null) {
+    throw new Error(
+      'No classId checkpoint is recorded or the checkpoint is not in correct state'
+    );
+  }
+
+  let dataCheckpoint = checkpointFiles.data;
+  if (!fs.existsSync(dataCheckpoint)) {
+    throw new Error(
+      'No data checkpoint was found, The data checkpoint is not recorded correctly.'
+    );
+  }
+  let { header: dataHeader, records: dataRecords } =
+    readCsvSync(dataCheckpoint);
+  let [addressIndex] = getColumnIndex(dataHeader, [headerTitles.address]);
+
+  if (!addressIndex) {
+    throw new Error(
+      'No address checkpoint is recorded or the checkpoint is not in a correct state.'
+    );
+  }
+
+  // load last minted batch from checkpoint
   let batchSize = parseInt(wfSetting?.instance?.batchSize) || 100;
   let { instances: startInstanceId } = await api.query.uniques.class(classId);
   let lastBatch = 0;
   let batchCheckpoint = checkpointFiles.batch;
+  let batchHeader;
+  let batchRecords;
+  let lastBatchIndex;
   if (fs.existsSync(batchCheckpoint)) {
     // the class has already been created
     const { header: batchHeader, records: batchRecords } =
@@ -216,10 +259,18 @@ const mintInstancesInBatch = async () => {
     } else {
       lastBatch = 0;
       batchHeader.push(headerTitles.lastMintBatch);
-      batchRecords.push('');
+      batchRecords = batchRecords.map((record) => record.push(''));
       lastBatchIndex = batchHeader.length - 1;
     }
+  } else {
+    lastBatch = 0;
+    batchHeader = [];
+    batchRecords = [[]];
+    batchHeader.push(headerTitles.lastMintBatch);
+    batchRecords = batchRecords.map((record) => record.push(''));
+    lastBatchIndex = batchHeader.length - 1;
   }
+
   let ownerAddresses = dataRecords.map((record) => record[addressIndex]);
   while (startRecordNo + lastBatch * batchSize < endRecordNo) {
     console.log(`Sending batch number ${lastBatch + 1}`);
@@ -255,7 +306,8 @@ const mintInstancesInBatch = async () => {
       dataRecords.push('');
     }
     if (i >= startRecordNo && i < endRecordNo) {
-      dataRecord[instanceIdIndex] = startInstanceId + 1;
+      dataRecord[instanceIdIndex] = currentInstanceId + 1;
+      currentInstanceId += 1;
     }
   }
 };
@@ -357,9 +409,9 @@ const setInstanceMetadata = async () => {
       'No data checkpoint was found, The data checkpoint is not recorded correctly.'
     );
   }
-  let { header: classHeader, records: classRecords } =
+  let { header: dataHeader, records: dataRecords } =
     readCsvSync(dataCheckpoint);
-  let [metaCidIndex, instanceIdIndex] = getColumnIndex(classHeader, [
+  let [metaCidIndex, instanceIdIndex] = getColumnIndex(dataHeader, [
     headerTitles.metaCid,
     headerTitles.instanceId,
   ]);
@@ -385,7 +437,7 @@ const setInstanceMetadata = async () => {
     const { header: batchHeader, records: batchRecords } =
       readCsvSync(batchCheckpoint);
     const [lastBatchIndex] = getColumnIndex(batchHeader, [
-      headerTitles.lastBatch,
+      headerTitles.lastMetadataBatch,
     ]);
     if (
       /* loose equality (==) is used to coerce values */
@@ -394,6 +446,10 @@ const setInstanceMetadata = async () => {
       lastBatch = batchRecords[0]?.[lastBatchIndex] || 0;
     }
   }
+  let instanceMetaCids = dataRecords.map((record) => ({
+    instanceId: record[instanceIdIndex],
+    metaCid: record[metaCidIndex],
+  }));
   while (startRecordNo + lastBatch * batchSize < endRecordNo) {
     console.log(`Sending batch number ${lastBatch + 1}`);
     let batchStartRecordNo = startRecordNo + lastBatch * batchSize;
@@ -402,9 +458,39 @@ const setInstanceMetadata = async () => {
       endRecordNo
     );
 
+    await setMetadataInBatch(
+      classId,
+      instanceMetaCids.slice(batchStartRecordNo, batchEndRecordNo)
+    );
     lastBatch += 1;
     console.log(events);
     console.log(`Batch number ${lastBatch} was minted successfully`);
-    writeCsvSync(mintCheckpoint, [headerTitles.lastBatch], [[lastBatch]]);
+    writeCsvSync(
+      mintCheckpoint,
+      [headerTitles.lastMetadataBatch],
+      [[lastBatch]]
+    );
   }
+};
+
+const runWorkflow = async () => {
+  // load the csv file with the required columns (first name, last name, email ), fail if columns are missing
+  // for each row from <starting row> up to the <maxmimum count> create
+  let { api, signingPair } = await connect();
+
+  // 1- create class
+  await createClass();
+
+  // 2- set classMetadata
+  await setClassMetadata();
+
+  // 3- generate secrets
+  await generateGiftSecrets();
+
+  //4- mint instances in batch
+  await mintInstancesInBatch();
+};
+
+module.exports = {
+  runWorkflow,
 };

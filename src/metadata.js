@@ -58,15 +58,22 @@ const generateMetadata = async (name, description, imageFile) => {
   return { metaCid, imageCid };
 };
 
-let setMetadataInBatch = async (classId, instanceId, metadataCid) => {
+let setMetadataInBatch = async (classId, instanceMetaCids) => {
   const { api, signingPair, proxiedAddress } = await connect();
-  let tx = api.tx.uniques.setMetadata(classId, instanceId, metadataCid, false);
 
-  let txCall = proxiedAddress
-    ? api.tx.proxy.proxy(proxiedAddress, 'Assets', tx)
-    : tx;
-  console.log(`sending tx with hash ${tx.toHex()}`);
-  await signAndSendTx(api, txCall, signingPair);
+  let instanceId = startInstanceId || 0;
+  let txs = [];
+  for (let i = 0; i < instanceMetaCids.length; i++) {
+    let { instanceId, metaCid } = instanceMetaCids[i];
+    txs.push(api.tx.uniques.mint(classId, instanceId, metaCid));
+  }
+
+  let txBatch = api.tx.utility.batchAll(txs);
+  let call = proxiedAddress
+    ? api.tx.proxy.proxy(proxiedAddress, 'Assets', txBatch)
+    : txBatch;
+  await signAndSendTx(api, call, signingPair);
+  console.log(call.toHuman());
 };
 
 let setClassMetadata = async (classId, metadataCid) => {
@@ -80,15 +87,15 @@ let setClassMetadata = async (classId, metadataCid) => {
   await signAndSendTx(api, txCall, signingPair);
 };
 
-const generateAndSetClassMetadata = async (classId, metedate) => {
+const generateAndSetClassMetadata = async (classId, metadata) => {
   let { name, description, imageFile } = metadata;
   let { metaCid } = await generateMetadata(name, description, imageFile);
-  await setClassMetadata(classid, metaCid);
+  await setClassMetadata(classId, metaCid);
   return metaCid;
 };
 
 module.exports = {
   generateAndSetClassMetadata,
-  setInstanceMetadata,
+  setMetadataInBatch,
   generateMetadata,
 };

@@ -39,4 +39,4 @@ const getColumnIndex = (header, columns) => {
   return indexes;
 };
 
-module.exports = { readCsvSync, writeCsvSync, getColumnIndex, headerTitles };
+module.exports = { readCsvSync, writeCsvSync, getColumnIndex };

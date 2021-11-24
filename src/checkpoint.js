@@ -9,7 +9,10 @@ const headerTitles = {
   instanceMetadata: 'instanceMetadat',
   secret: 'gift account secret',
   address: 'gift account address',
-  lastBatch: 'last batch number',
+  imageCid: 'image cid',
+  metaCid: 'metadata cid',
+  lastMintBatch: 'last minted batch',
+  lastMetadataBatch: 'last metadata batch',
 };
 
 const checkpointFiles = {
