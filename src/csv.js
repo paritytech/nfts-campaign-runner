@@ -25,13 +25,13 @@ const writeCsvSync = (file, headers, records) => {
   fs.writeFileSync(file, csvRecords);
 };
 
-const getColumnIndex = (header, columns) => {
+const getColumnIndex = (header, columnTitles) => {
   let indexes = [];
-  columns.forEach((col) => {
+  columnTitles.forEach((col) => {
     if (!col) {
       indexes.push(null);
     } else {
-      let idx = header.indexOf(col);
+      let idx = header?.indexOf(col);
       idx = idx === -1 ? null : idx;
       indexes.push(idx);
     }
@@ -39,4 +39,15 @@ const getColumnIndex = (header, columns) => {
   return indexes;
 };
 
-module.exports = { readCsvSync, writeCsvSync, getColumnIndex };
+const getColumns = (columnTitles, header, records) => {
+  const columnIdxs = getColumnIndex(header, columnTitles);
+  let columns = columnTitles.map((title) => ({ title, records: [] }));
+  records.forEach((record) => {
+    for (let i = 0; i < columnTitles.length; i++) {
+      columns[i].records.push(record[columnIdxs[i]]);
+    }
+  });
+  return columns;
+};
+
+module.exports = { readCsvSync, writeCsvSync, getColumnIndex, getColumns };

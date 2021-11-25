@@ -9,7 +9,7 @@ const {
 } = require('./metadata');
 const { generateSecret } = require('./giftSecrets');
 const { mintClassInstances } = require('./mint');
-const { headerTitles, checkpointFiles } = require('./checkpoint');
+const { columnTitles, getContext } = require('./checkpoint');
 
 const { connect } = require('./chain/chain');
 const wfSetting = require('./workflow.json');
@@ -17,34 +17,19 @@ const { signAndSendTx } = require('./chain/txHandler');
 
 const inqAsk = inquirer.createPromptModule();
 
-let startRecordNo = 0;
-let endRecordNo = -1;
-
 const createClass = async () => {
   // 1- create class
+  const context = getContext();
   const { api, signingPair, proxiedAddress } = await connect();
-  let classCheckpoint = checkpointFiles.class;
-  let classId;
   if (!wfSetting.class?.id) {
     throw new Error('No class id was found in workflow setting!');
   }
-  if (fs.existsSync(classCheckpoint)) {
-    // the class has already been created
-    const { header: classHeader, records: classRecords } =
-      readCsvSync(classCheckpoint);
-    const [classIdIndex] = getColumnIndex(classHeader, [headerTitles.classId]);
-    if (
-      /* loose equality (==) is used to coerce types */
-      classIdIndex != null &&
-      wfSetting.class?.id == classRecords[0][classIdIndex]
-    ) {
-      // classId exists and is valid
-      classId = classRecords[0][classIdIndex];
-    }
-  }
 
   // if a valid class is not already created or does not exist, create the class
-  if (!classId) {
+  if (
+    context.class.id == undefined ||
+    wfSetting.class?.id != context.class.id
+  ) {
     // check the specified class does not exist
     let cfgClassId = wfSetting.class?.id;
     let uniquesClass = await api.query.uniques.class(cfgClassId);
@@ -63,45 +48,33 @@ const createClass = async () => {
           'Please set a different class name in your workflow.json settings.'
         );
       } else {
-        classId = cfgClassId;
+        context.class.id = cfgClassId;
       }
     } else {
       // create a new class
-      classId = cfgClassId;
+      context.class.id = cfgClassId;
       let tx = api.tx.uniques.create(classId, signingPair?.address);
-      await signAndSendTx(api, tx, signingPair);
+      let call = proxiedAddress
+        ? api.tx.proxy.proxy(proxiedAddress, 'Assets', tx)
+        : tx;
+      await signAndSendTx(api, call, signingPair);
     }
-    // write the class checkpoint
-    writeCsvSync(classCheckpoint, [headerTitles.classId], [[classId]]);
+    // set the class checkpoint
+    context.class.checkpoint();
   }
 };
 
 const setClassMetadata = async () => {
   // 2-generate/set class metadata
+  const context = getContext();
 
-  // read classId from checkpoint
-  let classCheckpoint = checkpointFiles.class;
-  let classId;
-  if (!fs.existsSync(classCheckpoint)) {
-    throw new Error('No class checkpoint is recorded');
-  }
-  let { header: classHeader, records: classRecords } =
-    readCsvSync(classCheckpoint);
-  let [classIdIndex, classMetaIndex] = getColumnIndex(classHeader, [
-    headerTitles.classId,
-    headerTitles.classMetadata,
-  ]);
-  if (classIdIndex || classRecords[0]?.[classIdIndex]) {
-    classId = classRecords[0][classIdIndex];
-  }
-
-  if (classId == null) {
+  if (context.class.id == undefined) {
     throw new Error(
-      'No classId checkpoint is recorded or the checkpoint is not in correct state'
+      'No class.id checkpoint is recorded or the checkpoint is not in correct state'
     );
   }
 
-  if (!classMetaIndex || !classRecords[0]?.[classMetaIndex]) {
+  if (!context.class.metaCid) {
     // no class metadata is recorded in the checkpoint
     let metadata = wfSetting?.class?.metadata;
     if (!metadata) {
@@ -118,160 +91,81 @@ const setClassMetadata = async () => {
         throw new Error('Please configure a class metadata in workflow.json.');
       }
     } else {
-      let classMetadata = await generateAndSetClassMetadata(classId, metadata);
-      if (classMetadata) {
-        // new metadata is created add it to the checkpoint
-        if (classMetaIndex == null) {
-          classHeader.push(headerTitles.classMetadata);
-          classMetaIndex = classHeader.length - 1;
-        }
-        classRecords[0][classMetaIndex] = classMetadata;
-        console.log({ classCheckpoint, classHeader, classRecords });
-        writeCsvSync(classCheckpoint, classHeader, classRecords);
-      }
+      context.class.metaCid = await generateAndSetClassMetadata(
+        context.class.id,
+        metadata
+      );
+      // update class checkpoint
+      context.class.checkpoint();
     }
   }
 };
 
 const generateGiftSecrets = async () => {
   // 3-create nft secrets + addresses
-  let datafile = wfSetting?.instance?.data?.csvFile;
-  if (!datafile) {
-    throw new Error(
-      'The data source is not configured. Please configure instance.data.csvFile in your workflow.json'
-    );
-  }
-  if (!fs.existsSync(datafile)) {
-    throw new Error(
-      `The configured datafile does not exists. Please check if path: ${datafile} exists`
-    );
-  }
-  // copy file to checkpoint path if checkpoiint does not already exist
-  let dataCheckpoint = checkpointFiles.data;
-  if (!fs.existsSync(dataCheckpoint)) {
-    fs.copyFileSync(datafile, dataCheckpoint);
-  }
-  const { header: dataHeader, records: dataRecords } =
-    readCsvSync(dataCheckpoint);
-
-  // ToDO: if there are no dataRecords throw an error.
-  const instanceOffset = wfSetting?.instance?.data?.offset
-    ? wfSetting?.instance?.data?.offset - 1
-    : 0;
-  const instanceCount =
-    parseInt(wfSetting?.instance?.data?.count) ||
-    dataRecords.length - instanceOffset + 1;
-  startRecordNo = instanceOffset;
-  endRecordNo = Math.min(startRecordNo + instanceCount, dataRecords.length);
+  let context = getContext();
   // ToDO: check if instanceOffset + instanceCount is out of cound (> dataRecords.length) throw an error
-  let [secretIndex, addressIndex] = getColumnIndex(dataHeader, [
-    headerTitles.secret,
-    headerTitles.address,
-  ]);
-
-  if (secretIndex == null) {
-    dataHeader.push(headerTitles.secret);
-    secretIndex = dataHeader.length - 1;
-  }
-  if (addressIndex == null) {
-    dataHeader.push(headerTitles.address);
-    addressIndex = dataHeader.length - 1;
-  }
+  const [secretColumn, addressColumn] =
+    context.data.getColumns([columnTitles.secret, columnTitles.address]) || [];
 
   let isUpdated = false;
-  for (let i = 0; i < dataRecords.length; i++) {
-    if (secretIndex >= dataRecords[i].length) {
-      dataRecords[i].push('');
+  for (let i = 0; i < context.data.records.length; i++) {
+    if (i >= secretColumn.records.length) {
+      secretColumn.records.push('');
     }
-    if (addressIndex >= dataRecords[i].length) {
-      dataRecords[i].push('');
+    if (i >= addressColumn.records.length) {
+      addressColumn.records.push('');
     }
 
-    if (i >= startRecordNo && i < endRecordNo && !dataRecords[i][secretIndex]) {
+    if (
+      i >= context.data.startRecordNo &&
+      i < context.data.endRecordNo &&
+      !secretColumn.records[i]
+    ) {
       const { secret, address } = await generateSecret();
-      dataRecords[i][secretIndex] = secret;
-      dataRecords[i][addressIndex] = address;
+      secretColumn.records[i] = secret;
+      addressColumn.records[i] = address;
       isUpdated = true;
     }
   }
   if (isUpdated) {
-    writeCsvSync(dataCheckpoint, dataHeader, dataRecords);
+    context.data.setColumns([secretColumn, addressColumn]);
+    context.data.checkpoint();
   }
 };
 
 const mintInstancesInBatch = async () => {
   //4- mint instances in batch
   const { api, signingPair, proxiedAddress } = await connect();
+  const context = getContext();
+  const startRecordNo = context.data.startRecordNo;
+  const endRecordNo = context.data.endRecordNo;
 
   // read classId from checkpoint
-  let classCheckpoint = checkpointFiles.class;
-  let classId;
-  if (fs.existsSync(classCheckpoint)) {
-    let { header: classHeader, records: classRecords } =
-      readCsvSync(classCheckpoint);
-    let [classIdIndex] = getColumnIndex(classHeader, [headerTitles.classId]);
-    if (classIdIndex || classRecords[0]?.[classIdIndex]) {
-      classId = classRecords[0][classIdIndex];
-    }
-  }
-  if (classId == null) {
+  if (context.class.id == undefined) {
     throw new Error(
       'No classId checkpoint is recorded or the checkpoint is not in correct state'
     );
   }
 
-  let dataCheckpoint = checkpointFiles.data;
-  if (!fs.existsSync(dataCheckpoint)) {
-    throw new Error(
-      'No data checkpoint was found, The data checkpoint is not recorded correctly.'
-    );
-  }
-  let { header: dataHeader, records: dataRecords } =
-    readCsvSync(dataCheckpoint);
-  let [addressIndex] = getColumnIndex(dataHeader, [headerTitles.address]);
-
-  if (!addressIndex) {
+  let [addressColumn] = context.data.getColumns([columnTitles.address]);
+  if (
+    !addressColumn.records ||
+    !addressColumn.records[startRecordNo] ||
+    !addressColumn.records[endRecordNo - 1]
+  ) {
     throw new Error(
       'No address checkpoint is recorded or the checkpoint is not in a correct state.'
     );
   }
 
+  let { instances: startInstanceId } = await api.query.uniques.class(classId);
+
   // load last minted batch from checkpoint
   let batchSize = parseInt(wfSetting?.instance?.batchSize) || 100;
-  let { instances: startInstanceId } = await api.query.uniques.class(classId);
-  let lastBatch = 0;
-  let batchCheckpoint = checkpointFiles.batch;
-  let batchHeader;
-  let batchRecords;
-  let lastBatchIndex;
-  if (fs.existsSync(batchCheckpoint)) {
-    // the class has already been created
-    const { header: batchHeader, records: batchRecords } =
-      readCsvSync(batchCheckpoint);
-    const [lastBatchIndex] = getColumnIndex(batchHeader, [
-      headerTitles.lastMintBatch,
-    ]);
-    if (
-      /* loose equality (==) is used to coerce values */
-      lastBatchIndex != null
-    ) {
-      lastBatch = batchRecords[0]?.[lastMintBatchIndex] || 0;
-    } else {
-      lastBatch = 0;
-      batchHeader.push(headerTitles.lastMintBatch);
-      batchRecords = batchRecords.map((record) => record.push(''));
-      lastBatchIndex = batchHeader.length - 1;
-    }
-  } else {
-    lastBatch = 0;
-    batchHeader = [];
-    batchRecords = [[]];
-    batchHeader.push(headerTitles.lastMintBatch);
-    batchRecords = batchRecords.map((record) => record.push(''));
-    lastBatchIndex = batchHeader.length - 1;
-  }
+  let lastBatch = context.batch.lastMintBatch;
 
-  let ownerAddresses = dataRecords.map((record) => record[addressIndex]);
+  let ownerAddresses = addressColumn.records;
   while (startRecordNo + lastBatch * batchSize < endRecordNo) {
     console.log(`Sending batch number ${lastBatch + 1}`);
     let batchStartInstanceId = startInstanceId + lastBatch * batchSize;
@@ -289,36 +183,29 @@ const mintInstancesInBatch = async () => {
     lastBatch += 1;
     console.log(events);
     console.log(`Batch number ${lastBatch} was minted successfully`);
-    batchRecords[0][lastBatchIndex] = lastBatch;
-    writeCsvSync(batchCheckpoint, batchHeader, batchRecords);
-  }
-
-  let [instanceIdIndex] = getColumnIndex(dataHeader, [headerTitles.instanceId]);
-  if (instanceIdIndex == null) {
-    dataHeader.push(headerTitles.instanceId);
-    instanceIdIndex = dataHeader.length - 1;
+    context.batch.lastMintBatch = lastBatch;
+    context.batch.checkpoint();
   }
 
   // all instances are minted. set the instanceId for each record in data checkpoint.
   let currentInstanceId = startInstanceId;
-  for (let i = 0; i <= dataRecords.length; i++) {
-    if (instanceIdIndex > dataRecords.length) {
-      dataRecords.push('');
+  let instanceIdColumn = { title: columnTitles.instanceId, records: [] };
+  for (let i = 0; i <= context.data.records.length; i++) {
+    if (i > instanceIdColumn.records.length) {
+      instanceIdColumn.records.push('');
     }
     if (i >= startRecordNo && i < endRecordNo) {
-      dataRecord[instanceIdIndex] = currentInstanceId + 1;
+      instanceIdColumn.records[i] = currentInstanceId + 1;
       currentInstanceId += 1;
     }
   }
+  context.data.setColumns([instanceIdColumn]);
+  context.data.checkpoint();
 };
 
 const pinAndSetImageCid = async () => {
-  let dataCheckpoint = checkpointFiles.data;
-  if (!fs.existsSync(dataCheckpoint)) {
-    throw new Error(
-      'No data checkpoint was found, The data checkpoint is not recorded correctly.'
-    );
-  }
+  let context = getContext();
+  const { startRecordNo, endRecordNo } = context.data;
 
   const { name, description, imageFolder, extension } =
     wfSetting?.instance?.metadata;
@@ -327,23 +214,6 @@ const pinAndSetImageCid = async () => {
       `The instance image folder :${imageFolder} does not exist!`
     );
   }
-
-  // a class checkpoint already exists check if the metadata is already created
-  let { header: dataHeader, records: dataRecords } =
-    readCsvSync(dataCheckpoint);
-  let [imageCidIndex, metaCidIndex] = getColumnIndex(dataHeader, [
-    headerTitles.imageCid,
-    headerTitles.metaCid,
-  ]);
-  if (imageCidIndex == null) {
-    dataHeader.push(headerTitles.imageCid);
-    imageCidIndex = dataHeader.length - 1;
-  }
-  if (metaCidIndex == null) {
-    dataHeader.push(headerTitles.metaCid);
-    metaCidIndex = dataHeader.length - 1;
-  }
-
   for (let i = startRecordNo; i < endRecordNo; i++) {
     // check the image files exist
     let imageFile = path.join(imageFolder, `${i + 2}.${extension}`);
@@ -354,75 +224,68 @@ const pinAndSetImageCid = async () => {
       );
     }
   }
+
+  const [imageCidColumn, metaCidColumn] = context.data.getColumns([
+    columnTitles.imageCid,
+    columnTitles.metaCid,
+  ]);
   for (let i = 0; i < dataRecords.length; i++) {
-    if (imageCidIndex >= dataRecords[i].length) {
-      dataRecords[i].push('');
+    if (i >= imageCidColumn.records.length) {
+      imageCidColumn.records.push('');
     }
-    if (metaCidIndex >= dataRecords[i].length) {
-      dataRecords[i].push('');
+    if (i >= metaCidColumn.records.length) {
+      metaCidColumn.records.push('');
     }
 
-    if (
-      i >= startRecordNo &&
-      i < endRecordNo &&
-      !dataRecords[i][imageCidIndex]
-    ) {
+    if (i >= startRecordNo && i < endRecordNo && !metaCidColumn.records[i]) {
       let imageFile = path.join(imageFolder, `${i + 2}.${extension}`);
       const { metaCid, imageCid } = await generateMetadata(
         name,
         description,
         imageFile
       );
-      dataRecords[i][imageCidIndex] = imageCid;
-      dataRecords[i][metaCidIndex] = metaCid;
+      imageCidColumn.records[i] = imageCid;
+      metaCidColumn.records[i] = metaCid;
       isUpdated = true;
     }
   }
   if (isUpdated) {
-    writeCsvSync(dataCheckpoint, dataHeader, dataRecords);
+    context.data.setColumns([imageCidColumn, metaCidColumn]);
+    context.data.checkpoint();
   }
 };
 
 const setInstanceMetadata = async () => {
   //5- set metadata for instances
-
+  const context = getContext();
+  const { startRecordNo, endRecordNo } = context.data;
   // read classId from checkpoint
-  let classCheckpoint = checkpointFiles.class;
-  let classId;
-  if (fs.existsSync(classCheckpoint)) {
-    let { header: classHeader, records: classRecords } =
-      readCsvSync(classCheckpoint);
-    let [classIdIndex] = getColumnIndex(classHeader, [headerTitles.classId]);
-    if (classIdIndex || classRecords[0]?.[classIdIndex]) {
-      classId = classRecords[0][classIdIndex];
-    }
-  }
-  if (classId == null) {
+  if (context.class.id == null) {
     throw new Error(
       'No classId checkpoint is recorded or the checkpoint is not in correct state'
     );
   }
 
-  let dataCheckpoint = checkpointFiles.data;
-  if (!fs.existsSync(dataCheckpoint)) {
-    throw new Error(
-      'No data checkpoint was found, The data checkpoint is not recorded correctly.'
-    );
-  }
-  let { header: dataHeader, records: dataRecords } =
-    readCsvSync(dataCheckpoint);
-  let [metaCidIndex, instanceIdIndex] = getColumnIndex(dataHeader, [
-    headerTitles.metaCid,
-    headerTitles.instanceId,
+  const [metaCidColumn, instanceIdColumn] = context.data.getColumns([
+    columnTitles.metaCid,
+    columnTitles.instanceId,
   ]);
 
-  if (!metaCidIndex) {
+  if (
+    !metaCidColumn.records ||
+    !metaCidColumn.records[startRecordNo] ||
+    !metaCidColumn.records[endRecordNo]
+  ) {
     throw new Error(
       'No metadata checkpoint is recorded or the checkpoint is not in a correct state.'
     );
   }
 
-  if (!instanceIdIndex) {
+  if (
+    !instanceIdColumn.records ||
+    !instanceIdColumn.records[startRecordNo] ||
+    !instanceIdColumn.records[endRecordNo]
+  ) {
     throw new Error(
       'No instanceId checkpoint is recorded or the checkpoint is not in a correct state.'
     );
@@ -430,26 +293,15 @@ const setInstanceMetadata = async () => {
 
   // set the metadata for instances in batch
   let batchSize = parseInt(wfSetting?.instance?.batchSize) || 100;
-  let lastBatch = 0;
-  let batchCheckpoint = checkpointFiles.batch;
-  if (fs.existsSync(batchCheckpoint)) {
-    // the class has already been created
-    const { header: batchHeader, records: batchRecords } =
-      readCsvSync(batchCheckpoint);
-    const [lastBatchIndex] = getColumnIndex(batchHeader, [
-      headerTitles.lastMetadataBatch,
-    ]);
-    if (
-      /* loose equality (==) is used to coerce values */
-      lastBatchIndex != null
-    ) {
-      lastBatch = batchRecords[0]?.[lastBatchIndex] || 0;
-    }
+  let lastBatch = context.batch.lastMetadataBatch || 0;
+  let instanceMetadatas = [];
+  for (let i = 0; i <= context.data.records.length; i++) {
+    metadata = {
+      instanceId: instanceIdColumn.records[i],
+      metaCid: metaCidColumn.records[i],
+    };
+    instanceMetadatas.push(metadata);
   }
-  let instanceMetaCids = dataRecords.map((record) => ({
-    instanceId: record[instanceIdIndex],
-    metaCid: record[metaCidIndex],
-  }));
   while (startRecordNo + lastBatch * batchSize < endRecordNo) {
     console.log(`Sending batch number ${lastBatch + 1}`);
     let batchStartRecordNo = startRecordNo + lastBatch * batchSize;
@@ -460,16 +312,13 @@ const setInstanceMetadata = async () => {
 
     await setMetadataInBatch(
       classId,
-      instanceMetaCids.slice(batchStartRecordNo, batchEndRecordNo)
+      instanceMetadatas.slice(batchStartRecordNo, batchEndRecordNo)
     );
     lastBatch += 1;
     console.log(events);
     console.log(`Batch number ${lastBatch} was minted successfully`);
-    writeCsvSync(
-      mintCheckpoint,
-      [headerTitles.lastMetadataBatch],
-      [[lastBatch]]
-    );
+    context.batch.lastMetadataBatch = lastBatch;
+    context.batch.checkpoint();
   }
 };
 
@@ -489,6 +338,29 @@ const runWorkflow = async () => {
 
   //4- mint instances in batch
   await mintInstancesInBatch();
+  /*
+  context.class.load();
+  console.log(context.class.id, context.class.metaCid);
+  context.class.id = 1005;
+  context.class.metaCid = 'Qme1SdjcoZo11GzxT5ahHFN3sCK5thoB1pbDx1oTxjH6ak';
+  context.class.checkpoint();
+
+  context.batch.load();
+  console.log(context.batch.lastMintBatch, context.batch.lastMetadataBatch);
+  context.batch.lastMintBatch = 10;
+  context.batch.lastMetadataBatch = '1';
+  context.batch.checkpoint();
+
+  context.data.load();
+  let column = context.data.getColumns(['my new column']);
+  console.log(column?.records?.length, column?.records[0]);
+  column = { title: 'my new column', records: [] };
+  for (let i = 0; i < context.data.records.length; i++) {
+    column.records.push(i);
+  }
+  context.data.setColumns([column]);
+  console.log(column?.records?.length, column?.records[0]);
+  context.data.checkpoint();*/
 };
 
 module.exports = {

@@ -5,7 +5,6 @@ const { writeCsvSync, readCsvSync, getColumnIndex } = require('./csv');
 const { generateAndSetClassMetadata } = require('./metadata');
 const { generateSecret } = require('./giftSecrets');
 const { mintClassInstances } = require('./mint');
-const { headerTitles, checkpointFiles } = require('./checkpoint');
 const { runWorkflow } = require('./workflow');
 
 const { connect } = require('./chain/chain');
