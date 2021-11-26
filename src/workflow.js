@@ -53,7 +53,7 @@ const createClass = async () => {
     } else {
       // create a new class
       context.class.id = cfgClassId;
-      let tx = api.tx.uniques.create(classId, signingPair?.address);
+      let tx = api.tx.uniques.create(context.class.id, signingPair?.address);
       let call = proxiedAddress
         ? api.tx.proxy.proxy(proxiedAddress, 'Assets', tx)
         : tx;
@@ -104,7 +104,7 @@ const setClassMetadata = async () => {
 const generateGiftSecrets = async () => {
   // 3-create nft secrets + addresses
   let context = getContext();
-  // ToDO: check if instanceOffset + instanceCount is out of cound (> dataRecords.length) throw an error
+  // ToDO: check if instanceOffset + instanceCount is out of bound (> data.length) throw an error
   const [secretColumn, addressColumn] =
     context.data.getColumns([columnTitles.secret, columnTitles.address]) || [];
 
@@ -159,7 +159,7 @@ const mintInstancesInBatch = async () => {
     );
   }
 
-  let { instances: startInstanceId } = await api.query.uniques.class(classId);
+  let startInstanceId = 0;
 
   // load last minted batch from checkpoint
   let batchSize = parseInt(wfSetting?.instance?.batchSize) || 100;
@@ -175,7 +175,7 @@ const mintInstancesInBatch = async () => {
       endRecordNo
     );
     let events = await mintClassInstances(
-      classId,
+      context.class.id,
       batchStartInstanceId,
       ownerAddresses.slice(batchStartRecordNo, batchEndRecordNo)
     );
@@ -204,6 +204,7 @@ const mintInstancesInBatch = async () => {
 };
 
 const pinAndSetImageCid = async () => {
+  // 5- pin images and generate metadata
   let context = getContext();
   const { startRecordNo, endRecordNo } = context.data;
 
@@ -229,7 +230,8 @@ const pinAndSetImageCid = async () => {
     columnTitles.imageCid,
     columnTitles.metaCid,
   ]);
-  for (let i = 0; i < dataRecords.length; i++) {
+  let isUpdated = false;
+  for (let i = 0; i < context.data.records.length; i++) {
     if (i >= imageCidColumn.records.length) {
       imageCidColumn.records.push('');
     }
@@ -256,7 +258,7 @@ const pinAndSetImageCid = async () => {
 };
 
 const setInstanceMetadata = async () => {
-  //5- set metadata for instances
+  // 6- set metadata for instances
   const context = getContext();
   const { startRecordNo, endRecordNo } = context.data;
   // read classId from checkpoint
@@ -274,7 +276,7 @@ const setInstanceMetadata = async () => {
   if (
     !metaCidColumn.records ||
     !metaCidColumn.records[startRecordNo] ||
-    !metaCidColumn.records[endRecordNo]
+    !metaCidColumn.records[endRecordNo - 1]
   ) {
     throw new Error(
       'No metadata checkpoint is recorded or the checkpoint is not in a correct state.'
@@ -284,7 +286,7 @@ const setInstanceMetadata = async () => {
   if (
     !instanceIdColumn.records ||
     !instanceIdColumn.records[startRecordNo] ||
-    !instanceIdColumn.records[endRecordNo]
+    !instanceIdColumn.records[endRecordNo - 1]
   ) {
     throw new Error(
       'No instanceId checkpoint is recorded or the checkpoint is not in a correct state.'
@@ -310,8 +312,8 @@ const setInstanceMetadata = async () => {
       endRecordNo
     );
 
-    await setMetadataInBatch(
-      classId,
+    let events = await setMetadataInBatch(
+      context.class.id,
       instanceMetadatas.slice(batchStartRecordNo, batchEndRecordNo)
     );
     lastBatch += 1;
@@ -338,6 +340,13 @@ const runWorkflow = async () => {
 
   //4- mint instances in batch
   await mintInstancesInBatch();
+
+  //5- set metadata for instances
+  await pinAndSetImageCid();
+
+  //5- pin images and generate metadata
+  await setInstanceMetadata();
+
   /*
   context.class.load();
   console.log(context.class.id, context.class.metaCid);

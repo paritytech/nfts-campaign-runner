@@ -124,8 +124,8 @@ const context = {
       this.records = records;
 
       // set satrt and end row numbers
-      const instanceOffset = wfSetting?.instance?.data?.offset
-        ? wfSetting?.instance?.data?.offset - 1
+      const instanceOffset = parseInt(wfSetting?.instance?.data?.offset)
+        ? parseInt(wfSetting?.instance?.data?.offset) - 1
         : 0;
       const instanceCount =
         parseInt(wfSetting?.instance?.data?.count) ||
@@ -151,10 +151,10 @@ const context = {
           columnTitles.lastMetadataBatch,
         ]);
         if (records[0]?.[lastMintBatchIdx]) {
-          this.lastMintBatch = records[0][lastMintBatchIdx];
+          this.lastMintBatch = parseInt(records[0][lastMintBatchIdx]);
         }
         if (records[0]?.[lastMetaBatchIdx]) {
-          this.lastMetadataBatch = records[0][lastMetaBatchIdx];
+          this.lastMetadataBatch = parseInt(records[0][lastMetaBatchIdx]);
         }
       }
     },
