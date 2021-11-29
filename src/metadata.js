@@ -1,21 +1,8 @@
-const { connect } = require('./chain/chain');
 const { signAndSendTx } = require('./chain/txHandler');
-const wfSetting = require('./workflow.json');
 const fs = require('fs');
 const path = require('path');
 
-const pinFile = require('./pinata/pinFile');
-
-let createMataJson = (name, imageCid) => {
-  let metadata = {
-    name: `${name}, 1 year anniversary at Parity`,
-    image: `ipfs://ipfs/${imageCid}`,
-    description: `Happy 1 year anniversary ${name}. Thank you for all you have done throughout your journey at Parity.`,
-  };
-  return JSON.stringify(metadata, null, 2);
-};
-
-const generateMetadata = async (name, description, imageFile) => {
+const generateMetadata = async (pinataClient, name, description, imageFile) => {
   // pin image
   let imagePath = path.resolve(imageFile);
   if (!fs.existsSync(imagePath)) {
@@ -29,7 +16,7 @@ const generateMetadata = async (name, description, imageFile) => {
   let { dir, name: fname } = path.parse(imagePath);
   let metaPath = path.join(dir, `${fname}.meta`);
 
-  let imagePinResult = await pinFile(imagePath, `${fname}.image`);
+  let imagePinResult = await pinataClient.pinFile(imagePath, `${fname}.image`);
   let imageCid = imagePinResult?.IpfsHash;
   if (!imageCid) {
     throw new Error(`failed to pin image.`);
@@ -48,7 +35,7 @@ const generateMetadata = async (name, description, imageFile) => {
   fs.writeFileSync(metaPath, metadataStr, { encoding: 'utf8' });
 
   // pin metadata
-  let metaPinResult = await pinFile(metaPath, `${fname}.meta`);
+  let metaPinResult = await pinataClient.pinFile(metaPath, `${fname}.meta`);
   let metaCid = metaPinResult?.IpfsHash;
   if (!metaCid) {
     throw new Error(`failed to pin metadata`);
@@ -56,8 +43,8 @@ const generateMetadata = async (name, description, imageFile) => {
   return { metaCid, imageCid };
 };
 
-let setMetadataInBatch = async (classId, instanceMetaCids) => {
-  const { api, signingPair, proxiedAddress } = await connect();
+let setMetadataInBatch = async (connection, classId, instanceMetaCids) => {
+  const { api, signingPair, proxiedAddress } = await connection;
 
   let txs = [];
   for (let i = 0; i < instanceMetaCids.length; i++) {
@@ -73,8 +60,8 @@ let setMetadataInBatch = async (classId, instanceMetaCids) => {
   console.log(call.toHuman());
 };
 
-let setClassMetadata = async (classId, metadataCid) => {
-  const { api, signingPair, proxiedAddress } = await connect();
+let setClassMetadata = async (connection, classId, metadataCid) => {
+  const { api, signingPair, proxiedAddress } = connection;
   let tx = api.tx.uniques.setClassMetadata(classId, metadataCid, false);
 
   let txCall = proxiedAddress
@@ -84,10 +71,20 @@ let setClassMetadata = async (classId, metadataCid) => {
   await signAndSendTx(api, txCall, signingPair);
 };
 
-const generateAndSetClassMetadata = async (classId, metadata) => {
+const generateAndSetClassMetadata = async (
+  connection,
+  pinataClient,
+  classId,
+  metadata
+) => {
   let { name, description, imageFile } = metadata;
-  let { metaCid } = await generateMetadata(name, description, imageFile);
-  await setClassMetadata(classId, metaCid);
+  let { metaCid } = await generateMetadata(
+    pinataClient,
+    name,
+    description,
+    imageFile
+  );
+  await setClassMetadata(connection, classId, metaCid);
   return metaCid;
 };
 

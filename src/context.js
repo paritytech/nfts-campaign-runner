@@ -1,4 +1,6 @@
 const fs = require('fs');
+const { connect } = require('./chain/chain');
+const { createPinataClient } = require('./pinata/pinataClient');
 const path = require('path');
 const {
   writeCsvSync,
@@ -6,7 +8,6 @@ const {
   getColumnIndex,
   getColumns,
 } = require('./csv');
-const wfSetting = require('./workflow.json');
 
 const checkpointPath = './';
 const columnTitles = {
@@ -38,15 +39,20 @@ const getCheckpointRecords = (file) => {
 
 const context = {
   isLoaded: false,
-  load: function () {
-    this.class.load();
-    this.batch.load();
-    this.data.load();
+  load: async function (wfConfig) {
+    this.network = await connect(wfConfig?.network);
+    this.pinataClient = createPinataClient(wfConfig?.pinata);
+    this.class.load(wfConfig);
+    this.batch.load(wfConfig);
+    this.data.load(wfConfig);
+    this.isLoaded = true;
   },
+  network: undefined,
+  pinataClient: undefined,
   class: {
     id: undefined,
     metaCid: undefined,
-    load: function () {
+    load: function (wfConfig) {
       let { header, records } = getCheckpointRecords(cpfiles.class) || {};
       if (header) {
         let [classIdIdx, classMetaIdx] = getColumnIndex(header, [
@@ -102,8 +108,8 @@ const context = {
         }
       }
     },
-    load: function () {
-      let datafile = wfSetting?.instance?.data?.csvFile;
+    load: function (wfConfig) {
+      let datafile = wfConfig?.instance?.data?.csvFile;
       if (!datafile) {
         throw new Error(
           'The data source is not configured. Please configure instance.data.csvFile in your workflow.json'
@@ -124,11 +130,11 @@ const context = {
       this.records = records;
 
       // set satrt and end row numbers
-      const instanceOffset = parseInt(wfSetting?.instance?.data?.offset)
-        ? parseInt(wfSetting?.instance?.data?.offset) - 1
+      const instanceOffset = parseInt(wfConfig?.instance?.data?.offset)
+        ? parseInt(wfConfig?.instance?.data?.offset) - 1
         : 0;
       const instanceCount =
-        parseInt(wfSetting?.instance?.data?.count) ||
+        parseInt(wfConfig?.instance?.data?.count) ||
         records.length - instanceOffset + 1;
       this.startRecordNo = instanceOffset;
       this.endRecordNo = Math.min(
@@ -143,7 +149,7 @@ const context = {
   batch: {
     lastMintBatch: 0,
     lastMetadataBatch: 0,
-    load: function () {
+    load: function (wfConfig) {
       let { header, records } = getCheckpointRecords(cpfiles.batch) || {};
       if (header) {
         let [lastMintBatchIdx, lastMetaBatchIdx] = getColumnIndex(header, [
@@ -168,11 +174,14 @@ const context = {
   },
 };
 
+const loadContext = async (wfConfig) => {
+  await context.load(wfConfig);
+  return context;
+};
 const getContext = () => {
   if (!context.isLoaded) {
-    console.log('loading context ...');
-    context.load();
+    throw new Error('The context for the workflow is not loaded.');
   }
   return context;
 };
-module.exports = { columnTitles: columnTitles, getContext };
+module.exports = { columnTitles: columnTitles, loadContext, getContext };

@@ -1,8 +1,8 @@
 const { seed, connect } = require('./chain/chain');
 const { signAndSendTx } = require('./chain/txHandler');
 
-let mintClassInstances = async (classId, startInstanceId, owners) => {
-  const { api, signingPair, proxiedAddress } = await connect();
+let mintClassInstances = async (network, classId, startInstanceId, owners) => {
+  const { api, signingPair, proxiedAddress } = network;
 
   let instanceId = startInstanceId || 0;
   let txs = [];

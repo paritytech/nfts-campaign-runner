@@ -1,7 +1,6 @@
 const inquirer = require('inquirer');
 const fs = require('fs');
 const path = require('path');
-const { writeCsvSync, readCsvSync, getColumnIndex } = require('./csv');
 const {
   generateAndSetClassMetadata,
   generateMetadata,
@@ -9,29 +8,23 @@ const {
 } = require('./metadata');
 const { generateSecret } = require('./giftSecrets');
 const { mintClassInstances } = require('./mint');
-const { columnTitles, getContext } = require('./checkpoint');
-
-const { connect } = require('./chain/chain');
-const wfSetting = require('./workflow.json');
+const { columnTitles, loadContext, getContext } = require('./context');
 const { signAndSendTx } = require('./chain/txHandler');
-
 const inqAsk = inquirer.createPromptModule();
+const { parseConfig } = require('./wfConfig');
 
-const createClass = async () => {
+const createClass = async (wfConfig) => {
   // 1- create class
   const context = getContext();
-  const { api, signingPair, proxiedAddress } = await connect();
-  if (!wfSetting.class?.id) {
+  const { api, signingPair, proxiedAddress } = context.network;
+  if (!wfConfig.class?.id) {
     throw new Error('No class id was found in workflow setting!');
   }
 
   // if a valid class is not already created or does not exist, create the class
-  if (
-    context.class.id == undefined ||
-    wfSetting.class?.id != context.class.id
-  ) {
+  if (context.class.id == undefined || wfConfig.class?.id != context.class.id) {
     // check the specified class does not exist
-    let cfgClassId = wfSetting.class?.id;
+    let cfgClassId = wfConfig.class?.id;
     let uniquesClass = await api.query.uniques.class(cfgClassId);
     if (uniquesClass?.isSome) {
       // class already exists ask user if they want to mint in the same class
@@ -64,7 +57,7 @@ const createClass = async () => {
   }
 };
 
-const setClassMetadata = async () => {
+const setClassMetadata = async (wfConfig) => {
   // 2-generate/set class metadata
   const context = getContext();
 
@@ -76,7 +69,7 @@ const setClassMetadata = async () => {
 
   if (!context.class.metaCid) {
     // no class metadata is recorded in the checkpoint
-    let metadata = wfSetting?.class?.metadata;
+    let metadata = wfConfig?.class?.metadata;
     if (!metadata) {
       // no class metdata is configured. ask user if they want to configure a class metadata
       let { withoutMetadata } = (await inqAsk([
@@ -92,6 +85,8 @@ const setClassMetadata = async () => {
       }
     } else {
       context.class.metaCid = await generateAndSetClassMetadata(
+        context.network,
+        context.pinataClient,
         context.class.id,
         metadata
       );
@@ -101,9 +96,10 @@ const setClassMetadata = async () => {
   }
 };
 
-const generateGiftSecrets = async () => {
+const generateGiftSecrets = async (wfConfig) => {
   // 3-create nft secrets + addresses
   let context = getContext();
+  let keyring = context.network.keyring;
   // ToDO: check if instanceOffset + instanceCount is out of bound (> data.length) throw an error
   const [secretColumn, addressColumn] =
     context.data.getColumns([columnTitles.secret, columnTitles.address]) || [];
@@ -122,7 +118,7 @@ const generateGiftSecrets = async () => {
       i < context.data.endRecordNo &&
       !secretColumn.records[i]
     ) {
-      const { secret, address } = await generateSecret();
+      const { secret, address } = await generateSecret(keyring);
       secretColumn.records[i] = secret;
       addressColumn.records[i] = address;
       isUpdated = true;
@@ -134,10 +130,10 @@ const generateGiftSecrets = async () => {
   }
 };
 
-const mintInstancesInBatch = async () => {
+const mintInstancesInBatch = async (wfConfig) => {
   //4- mint instances in batch
-  const { api, signingPair, proxiedAddress } = await connect();
   const context = getContext();
+  const { api, signingPair, proxiedAddress } = context.network;
   const startRecordNo = context.data.startRecordNo;
   const endRecordNo = context.data.endRecordNo;
 
@@ -162,7 +158,7 @@ const mintInstancesInBatch = async () => {
   let startInstanceId = 0;
 
   // load last minted batch from checkpoint
-  let batchSize = parseInt(wfSetting?.instance?.batchSize) || 100;
+  let batchSize = parseInt(wfConfig?.instance?.batchSize) || 100;
   let lastBatch = context.batch.lastMintBatch;
 
   let ownerAddresses = addressColumn.records;
@@ -175,6 +171,7 @@ const mintInstancesInBatch = async () => {
       endRecordNo
     );
     let events = await mintClassInstances(
+      context.network,
       context.class.id,
       batchStartInstanceId,
       ownerAddresses.slice(batchStartRecordNo, batchEndRecordNo)
@@ -203,13 +200,13 @@ const mintInstancesInBatch = async () => {
   context.data.checkpoint();
 };
 
-const pinAndSetImageCid = async () => {
+const pinAndSetImageCid = async (wfConfig) => {
   // 5- pin images and generate metadata
   let context = getContext();
   const { startRecordNo, endRecordNo } = context.data;
 
   const { name, description, imageFolder, extension } =
-    wfSetting?.instance?.metadata;
+    wfConfig?.instance?.metadata;
   if (!fs.existsSync(imageFolder)) {
     throw new Error(
       `The instance image folder :${imageFolder} does not exist!`
@@ -242,6 +239,7 @@ const pinAndSetImageCid = async () => {
     if (i >= startRecordNo && i < endRecordNo && !metaCidColumn.records[i]) {
       let imageFile = path.join(imageFolder, `${i + 2}.${extension}`);
       const { metaCid, imageCid } = await generateMetadata(
+        context.pinataClient,
         name,
         description,
         imageFile
@@ -257,7 +255,7 @@ const pinAndSetImageCid = async () => {
   }
 };
 
-const setInstanceMetadata = async () => {
+const setInstanceMetadata = async (wfConfig) => {
   // 6- set metadata for instances
   const context = getContext();
   const { startRecordNo, endRecordNo } = context.data;
@@ -294,7 +292,7 @@ const setInstanceMetadata = async () => {
   }
 
   // set the metadata for instances in batch
-  let batchSize = parseInt(wfSetting?.instance?.batchSize) || 100;
+  let batchSize = parseInt(wfConfig?.instance?.batchSize) || 100;
   let lastBatch = context.batch.lastMetadataBatch || 0;
   let instanceMetadatas = [];
   for (let i = 0; i <= context.data.records.length; i++) {
@@ -313,6 +311,7 @@ const setInstanceMetadata = async () => {
     );
 
     let events = await setMetadataInBatch(
+      context.network,
       context.class.id,
       instanceMetadatas.slice(batchStartRecordNo, batchEndRecordNo)
     );
@@ -324,52 +323,34 @@ const setInstanceMetadata = async () => {
   }
 };
 
-const runWorkflow = async () => {
-  // load the csv file with the required columns (first name, last name, email ), fail if columns are missing
-  // for each row from <starting row> up to the <maxmimum count> create
-  let { api, signingPair } = await connect();
+const runWorkflow = async (configFile = './src/workflow.json') => {
+  console.log('loading the workflow config ...');
+  let { error, config } = parseConfig(configFile);
+  if (error) {
+    throw new Error(
+      `there was an error while loading the worklow config: ${error}`
+    );
+  }
+  console.log('setting the context for the workflow ...');
+  await loadContext(config);
 
   // 1- create class
-  await createClass();
+  await createClass(config);
 
   // 2- set classMetadata
-  await setClassMetadata();
+  await setClassMetadata(config);
 
   // 3- generate secrets
-  await generateGiftSecrets();
+  await generateGiftSecrets(config);
 
   //4- mint instances in batch
-  await mintInstancesInBatch();
+  await mintInstancesInBatch(config);
 
   //5- set metadata for instances
-  await pinAndSetImageCid();
+  await pinAndSetImageCid(config);
 
   //5- pin images and generate metadata
-  await setInstanceMetadata();
-
-  /*
-  context.class.load();
-  console.log(context.class.id, context.class.metaCid);
-  context.class.id = 1005;
-  context.class.metaCid = 'Qme1SdjcoZo11GzxT5ahHFN3sCK5thoB1pbDx1oTxjH6ak';
-  context.class.checkpoint();
-
-  context.batch.load();
-  console.log(context.batch.lastMintBatch, context.batch.lastMetadataBatch);
-  context.batch.lastMintBatch = 10;
-  context.batch.lastMetadataBatch = '1';
-  context.batch.checkpoint();
-
-  context.data.load();
-  let column = context.data.getColumns(['my new column']);
-  console.log(column?.records?.length, column?.records[0]);
-  column = { title: 'my new column', records: [] };
-  for (let i = 0; i < context.data.records.length; i++) {
-    column.records.push(i);
-  }
-  context.data.setColumns([column]);
-  console.log(column?.records?.length, column?.records[0]);
-  context.data.checkpoint();*/
+  await setInstanceMetadata(config);
 };
 
 module.exports = {
