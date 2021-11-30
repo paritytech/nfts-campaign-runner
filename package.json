@@ -2,15 +2,19 @@
   "name": "uniques-campaign-runner",
   "version": "1.0.0",
   "description": "A cli tool to automate running NFT campaign workflows on substrate-uniques-pallet in bulk",
-  "main": "index.js",
+  "main": "./src/index.js",
   "repository": "https://github.com/hamidra/uniques-campaign-runner.git",
   "author": "hamidra <hamid.alipour@gmail.com>",
   "license": "Apache License 2.0",
+  "bin": {
+    "uniqcamp": "./src/index.js"
+  },
   "dependencies": {
     "@pinata/sdk": "^1.1.23",
     "@polkadot/api": "^6.6.1",
     "@polkadot/keyring": "^7.7.1",
     "@polkadot/util-crypto": "^7.7.1",
+    "commander": "^8.3.0",
     "csv": "^5.5.3",
     "inquirer": "^8.2.0"
   },
