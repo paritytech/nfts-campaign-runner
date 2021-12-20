@@ -1,6 +1,7 @@
 # uniques-campaign-runner
 
-a cli tool to automate running NFT campaign workflows on substrate-uniques-pallet in bulk
+A cli tool to automate running NFT campaign workflows on substrate-uniques-pallet in bulk.  
+The tools works in combination with [nft gift app](https://github.com/hamidra/dotdrop/tree/polkadot-nft) to mint NFT's in bulk and create nft gift codes which can be claimed using the [nft claim apps](https://claimnft.kusama.network).
 
 ## Install
 
