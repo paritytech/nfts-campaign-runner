@@ -1,4 +1,4 @@
-const { signAndSendTx } = require('./chain/txHandler');
+const { signAndSendTx } = require('../chain/txHandler');
 const fs = require('fs');
 const path = require('path');
 
@@ -6,12 +6,14 @@ const generateMetadata = async (pinataClient, name, description, imageFile) => {
   // pin image
   let imagePath = path.resolve(imageFile);
   if (!fs.existsSync(imagePath)) {
-    throw new Error(
+    throw new WorkflowError(
       `the configured class image path: ${imagePath} does not exist`
     );
   }
   if (!fs.statSync(imagePath)?.isFile()) {
-    throw new Error(`the configured image path: ${imagePath} is not a file`);
+    throw new WorkflowError(
+      `the configured image path: ${imagePath} is not a file`
+    );
   }
   let { dir, name: fname } = path.parse(imagePath);
   let metaPath = path.join(dir, `${fname}.meta`);
@@ -19,7 +21,7 @@ const generateMetadata = async (pinataClient, name, description, imageFile) => {
   let imagePinResult = await pinataClient.pinFile(imagePath, `${fname}.image`);
   let imageCid = imagePinResult?.IpfsHash;
   if (!imageCid) {
-    throw new Error(`failed to pin image.`);
+    throw new WorkflowError(`failed to pin image.`);
   }
 
   // create metatdata
@@ -38,7 +40,7 @@ const generateMetadata = async (pinataClient, name, description, imageFile) => {
   let metaPinResult = await pinataClient.pinFile(metaPath, `${fname}.meta`);
   let metaCid = metaPinResult?.IpfsHash;
   if (!metaCid) {
-    throw new Error(`failed to pin metadata`);
+    throw new WorkflowError(`failed to pin metadata`);
   }
   return { metaCid, imageCid };
 };

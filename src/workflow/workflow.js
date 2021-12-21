@@ -9,16 +9,17 @@ const {
 const { generateSecret } = require('./giftSecrets');
 const { mintClassInstances } = require('./mint');
 const { columnTitles, loadContext, getContext } = require('./context');
-const { signAndSendTx } = require('./chain/txHandler');
+const { signAndSendTx } = require('../chain/txHandler');
 const inqAsk = inquirer.createPromptModule();
 const { parseConfig } = require('./wfConfig');
+const { WorkflowError } = require('../Errors');
 
 const createClass = async (wfConfig) => {
   // 1- create class
   const context = getContext();
   const { api, signingPair, proxiedAddress } = context.network;
   if (!wfConfig.class?.id) {
-    throw new Error('No class id was found in workflow setting!');
+    throw new WorkflowError('No class id was found in workflow setting!');
   }
 
   // if a valid class is not already created or does not exist, create the class
@@ -37,7 +38,7 @@ const createClass = async (wfConfig) => {
         },
       ])) || { appendToClass: false };
       if (!answer?.appendToClass) {
-        throw new Error(
+        throw new WorkflowError(
           'Please set a different class name in your workflow.json settings.'
         );
       } else {
@@ -62,7 +63,7 @@ const setClassMetadata = async (wfConfig) => {
   const context = getContext();
 
   if (context.class.id == undefined) {
-    throw new Error(
+    throw new WorkflowError(
       'No class.id checkpoint is recorded or the checkpoint is not in correct state'
     );
   }
@@ -81,7 +82,9 @@ const setClassMetadata = async (wfConfig) => {
         },
       ])) || { withoutMetadata: false };
       if (!withoutMetadata) {
-        throw new Error('Please configure a class metadata in workflow.json.');
+        throw new WorkflowError(
+          'Please configure a class metadata in workflow.json.'
+        );
       }
     } else {
       context.class.metaCid = await generateAndSetClassMetadata(
@@ -139,7 +142,7 @@ const mintInstancesInBatch = async (wfConfig) => {
 
   // read classId from checkpoint
   if (context.class.id == undefined) {
-    throw new Error(
+    throw new WorkflowError(
       'No classId checkpoint is recorded or the checkpoint is not in correct state'
     );
   }
@@ -150,7 +153,7 @@ const mintInstancesInBatch = async (wfConfig) => {
     !addressColumn.records[startRecordNo] ||
     !addressColumn.records[endRecordNo - 1]
   ) {
-    throw new Error(
+    throw new WorkflowError(
       'No address checkpoint is recorded or the checkpoint is not in a correct state.'
     );
   }
@@ -208,7 +211,7 @@ const pinAndSetImageCid = async (wfConfig) => {
   const { name, description, imageFolder, extension } =
     wfConfig?.instance?.metadata;
   if (!fs.existsSync(imageFolder)) {
-    throw new Error(
+    throw new WorkflowError(
       `The instance image folder :${imageFolder} does not exist!`
     );
   }
@@ -217,7 +220,7 @@ const pinAndSetImageCid = async (wfConfig) => {
     let imageFile = path.join(imageFolder, `${i + 2}.${extension}`);
     if (!fs.existsSync(imageFile)) {
       // ToDo: instead of throwing ask if the user wants to continue by skipping minting for those rows
-      throw new Error(
+      throw new WorkflowError(
         `imageFile: ${imageFile} does not exist to be minted for row:${i + 2}`
       );
     }
@@ -261,7 +264,7 @@ const setInstanceMetadata = async (wfConfig) => {
   const { startRecordNo, endRecordNo } = context.data;
   // read classId from checkpoint
   if (context.class.id == null) {
-    throw new Error(
+    throw new WorkflowError(
       'No classId checkpoint is recorded or the checkpoint is not in correct state'
     );
   }
@@ -276,7 +279,7 @@ const setInstanceMetadata = async (wfConfig) => {
     !metaCidColumn.records[startRecordNo] ||
     !metaCidColumn.records[endRecordNo - 1]
   ) {
-    throw new Error(
+    throw new WorkflowError(
       'No metadata checkpoint is recorded or the checkpoint is not in a correct state.'
     );
   }
@@ -286,7 +289,7 @@ const setInstanceMetadata = async (wfConfig) => {
     !instanceIdColumn.records[startRecordNo] ||
     !instanceIdColumn.records[endRecordNo - 1]
   ) {
-    throw new Error(
+    throw new WorkflowError(
       'No instanceId checkpoint is recorded or the checkpoint is not in a correct state.'
     );
   }
@@ -327,7 +330,7 @@ const runWorkflow = async (configFile = './src/workflow.json') => {
   console.log('loading the workflow config ...');
   let { error, config } = parseConfig(configFile);
   if (error) {
-    throw new Error(
+    throw new WorkflowError(
       `there was an error while loading the worklow config: ${error}`
     );
   }

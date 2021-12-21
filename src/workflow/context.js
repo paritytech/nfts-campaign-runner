@@ -1,13 +1,15 @@
 const fs = require('fs');
-const { connect } = require('./chain/chain');
-const { createPinataClient } = require('./pinata/pinataClient');
+const { connect } = require('../chain/chain');
+const { createPinataClient } = require('../pinata/pinataClient');
 const path = require('path');
 const {
   writeCsvSync,
   readCsvSync,
   getColumnIndex,
   getColumns,
-} = require('./csv');
+} = require('../utils/csv');
+
+const { WorkflowError } = require('../Errors');
 
 const checkpointPath = './';
 const columnTitles = {
@@ -91,7 +93,7 @@ const context = {
       let columnIdxs = [];
       columns.forEach((column) => {
         if (column.records.length !== this.records.length) {
-          throw new Error(
+          throw new WorkflowError(
             `Can not add the column ${column.title} to records. The number of records in the column is not equal to the number of data records`
           );
         }
@@ -111,12 +113,12 @@ const context = {
     load: function (wfConfig) {
       let datafile = wfConfig?.instance?.data?.csvFile;
       if (!datafile) {
-        throw new Error(
+        throw new WorkflowError(
           'The data source is not configured. Please configure instance.data.csvFile in your workflow.json'
         );
       }
       if (!fs.existsSync(datafile)) {
-        throw new Error(
+        throw new WorkflowError(
           `The configured datafile does not exists. Please check if path: ${datafile} exists`
         );
       }
@@ -180,7 +182,7 @@ const loadContext = async (wfConfig) => {
 };
 const getContext = () => {
   if (!context.isLoaded) {
-    throw new Error('The context for the workflow is not loaded.');
+    throw new WorkflowError('The context for the workflow is not loaded.');
   }
   return context;
 };
