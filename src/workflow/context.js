@@ -23,6 +23,7 @@ const columnTitles = {
   metaCid: 'metadata cid',
   lastMintBatch: 'last minted batch',
   lastMetadataBatch: 'last metadata batch',
+  lastBalanceTxBatch: 'last balance transfer batch',
 };
 
 const cpfiles = {
@@ -151,26 +152,36 @@ const context = {
   batch: {
     lastMintBatch: 0,
     lastMetadataBatch: 0,
+    lastBalanceTxBatch: 0,
     load: function (wfConfig) {
       let { header, records } = getCheckpointRecords(cpfiles.batch) || {};
       if (header) {
-        let [lastMintBatchIdx, lastMetaBatchIdx] = getColumnIndex(header, [
-          columnTitles.lastMintBatch,
-          columnTitles.lastMetadataBatch,
-        ]);
+        let [lastMintBatchIdx, lastMetaBatchIdx, lastBalanceTxBatchIdx] =
+          getColumnIndex(header, [
+            columnTitles.lastMintBatch,
+            columnTitles.lastMetadataBatch,
+            columnTitles.lastBalanceTxBatch,
+          ]);
         if (records[0]?.[lastMintBatchIdx]) {
           this.lastMintBatch = parseInt(records[0][lastMintBatchIdx]);
         }
         if (records[0]?.[lastMetaBatchIdx]) {
           this.lastMetadataBatch = parseInt(records[0][lastMetaBatchIdx]);
         }
+        if (records[0]?.[lastBalanceTxBatchIdx]) {
+          this.lastBalanceTxBatch = parseInt(records[0][lastBalanceTxBatchIdx]);
+        }
       }
     },
     checkpoint: function () {
       writeCsvSync(
         cpfiles.batch,
-        [columnTitles.lastMintBatch, columnTitles.lastMetadataBatch],
-        [[this.lastMintBatch, this.lastMetadataBatch]]
+        [
+          columnTitles.lastMintBatch,
+          columnTitles.lastMetadataBatch,
+          columnTitles.lastBalanceTxBatch,
+        ],
+        [[this.lastMintBatch, this.lastMetadataBatch, this.lastBalanceTxBatch]]
       );
     },
   },

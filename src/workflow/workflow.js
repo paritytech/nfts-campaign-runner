@@ -8,6 +8,7 @@ const {
 } = require('./metadata');
 const { generateSecret } = require('./giftSecrets');
 const { mintClassInstances } = require('./mint');
+const { transferFunds } = require('./balanceTransfer');
 const { columnTitles, loadContext, getContext } = require('./context');
 const { signAndSendTx } = require('../chain/txHandler');
 const inqAsk = inquirer.createPromptModule();
@@ -326,6 +327,60 @@ const setInstanceMetadata = async (wfConfig) => {
   }
 };
 
+const sendInitialFunds = async (wfConfig) => {
+  // 7-fund accounts with some initial funds
+  const amount = wfConfig?.instance?.initialFund;
+
+  // if no initialFund is set or initialFund is set to zero, skip this step.
+  if (!amount) {
+    console.log(
+      'no initialFunds was set in workflow. skipping sendInitialFunds!'
+    );
+    return;
+  }
+
+  const context = getContext();
+  const { api, signingPair, proxiedAddress } = context.network;
+  const startRecordNo = context.data.startRecordNo;
+  const endRecordNo = context.data.endRecordNo;
+
+  let [addressColumn] = context.data.getColumns([columnTitles.address]);
+  if (
+    !addressColumn.records ||
+    !addressColumn.records[startRecordNo] ||
+    !addressColumn.records[endRecordNo - 1]
+  ) {
+    throw new WorkflowError(
+      'No address checkpoint is recorded or the checkpoint is not in a correct state.'
+    );
+  }
+
+  // load last balanceTx batch from checkpoint
+  let batchSize = parseInt(wfConfig?.instance?.batchSize) || 100;
+  let lastBatch = context.batch.lastBalanceTxBatch;
+
+  let ownerAddresses = addressColumn.records;
+  while (startRecordNo + lastBatch * batchSize < endRecordNo) {
+    console.log(`Sending batch number ${lastBatch + 1}`);
+    let batchStartRecordNo = startRecordNo + lastBatch * batchSize;
+    let batchEndRecordNo = Math.min(
+      startRecordNo + (lastBatch + 1) * batchSize,
+      endRecordNo
+    );
+    let events = await transferFunds(
+      context.network,
+      ownerAddresses.slice(batchStartRecordNo, batchEndRecordNo),
+      amount
+    );
+
+    lastBatch += 1;
+    console.log(events);
+    console.log(`Batch number ${lastBatch} was funded successfully`);
+    context.batch.lastMintBatch = lastBatch;
+    context.batch.checkpoint();
+  }
+};
+
 const runWorkflow = async (configFile = './src/workflow.json') => {
   console.log('loading the workflow config ...');
   let { error, config } = parseConfig(configFile);
@@ -349,11 +404,14 @@ const runWorkflow = async (configFile = './src/workflow.json') => {
   //4- mint instances in batch
   await mintInstancesInBatch(config);
 
-  //5- set metadata for instances
+  //5- pin images and generate metadata
   await pinAndSetImageCid(config);
 
-  //5- pin images and generate metadata
+  //6- set metadata for instances
   await setInstanceMetadata(config);
+
+  //7-fund gift accounts with the initialFund amount.
+  await sendInitialFunds(config);
 };
 
 module.exports = {
