@@ -23,7 +23,7 @@ npm install -g .
 
 To define your workflow you need to provide the cli with a workflow.json using the following template:
 
-```bash
+```json
 {
   "network": {
     "provider": "<provider e.g. wss://statemine-rpc.polkadot.io>",
@@ -48,7 +48,8 @@ To define your workflow you need to provide the cli with a workflow.json using t
       "offset": "<the row offset, if not specified it starts from row 0>",
       "count": "<the number of rows to be used after offset, if not specified it will count up to last row.>"
     },
-    "initialFund": "<initial starting balance for the created gift accounts to be used to fund the tx fees when the NFTs are claimed.>",
+    "initialFund": "<initial starting balance (in chain decimal) for the created gift accounts to be used to fund the tx fees when the NFTs are claimed.
+    Make sure it is above the Existential Deposit(ED) of the chain!>",
     "batchSize": "<the number of transactions that are send in a batch. default to 100 if not specified>",
     "metadata": {
       "imageFolder": "<the path to the media folder that will be minted>",
