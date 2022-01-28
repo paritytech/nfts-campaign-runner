@@ -1,5 +1,5 @@
 const fs = require('fs');
-const syncCsvParse = require('csv-parse/lib/sync');
+const syncCsvParse = require('csv-parse/sync');
 
 const readCsvSync = (file, hasHeader = true) => {
   const data = fs.readFileSync(file);
