@@ -14,6 +14,7 @@ const { signAndSendTx } = require('../chain/txHandler');
 const inqAsk = inquirer.createPromptModule();
 const { parseConfig } = require('./wfConfig');
 const { WorkflowError } = require('../Errors');
+const { fillTemplateFromData } = require('../utils/csv');
 
 const createClass = async (wfConfig) => {
   // 1- create class
@@ -242,10 +243,19 @@ const pinAndSetImageCid = async (wfConfig) => {
 
     if (i >= startRecordNo && i < endRecordNo && !metaCidColumn.records[i]) {
       let imageFile = path.join(imageFolder, `${i + 2}.${extension}`);
+      // fill template description to build the description string
+      let instanceDescription = fillTemplateFromData(
+        description,
+        context.data.header,
+        context.data.records[i]
+      );
+
+      console.log(instanceDescription);
+
       const { metaCid, imageCid } = await generateMetadata(
         context.pinataClient,
         name,
-        description,
+        instanceDescription,
         imageFile
       );
       imageCidColumn.records[i] = imageCid;
@@ -376,7 +386,7 @@ const sendInitialFunds = async (wfConfig) => {
     lastBatch += 1;
     console.log(events);
     console.log(`Batch number ${lastBatch} was funded successfully`);
-    context.batch.lastMintBatch = lastBatch;
+    context.batch.lastBalanceTxBatch = lastBatch;
     context.batch.checkpoint();
   }
 };
