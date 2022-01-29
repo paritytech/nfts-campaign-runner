@@ -1,11 +1,11 @@
 const fs = require('fs');
-const syncCsvParse = require('csv-parse/sync');
+const { parse } = require('csv-parse/sync');
 
 const readCsvSync = (file, hasHeader = true) => {
   const data = fs.readFileSync(file);
   let header = [];
 
-  let records = syncCsvParse(data, {
+  let records = parse(data, {
     skip_empty_lines: true,
   });
 
@@ -39,6 +39,16 @@ const getColumnIndex = (header, columnTitles) => {
   return indexes;
 };
 
+const fillTemplateFromData = (template, header, data) => {
+  const pattern = /<<[^<>]+>>/g; // {property}
+  return template.replace(pattern, (token) => {
+    let columnTitle = token.replace(/[<>]+/g, '');
+    let [idx] = getColumnIndex(header, [columnTitle]);
+    let result = idx != null ? data[idx] : '';
+    return result;
+  });
+};
+
 const getColumns = (columnTitles, header, records) => {
   const columnIdxs = getColumnIndex(header, columnTitles);
   let columns = columnTitles.map((title) => ({ title, records: [] }));
@@ -50,4 +60,10 @@ const getColumns = (columnTitles, header, records) => {
   return columns;
 };
 
-module.exports = { readCsvSync, writeCsvSync, getColumnIndex, getColumns };
+module.exports = {
+  readCsvSync,
+  writeCsvSync,
+  getColumnIndex,
+  getColumns,
+  fillTemplateFromData,
+};
