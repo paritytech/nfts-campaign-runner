@@ -11,7 +11,7 @@ const {
 
 const { WorkflowError } = require('../Errors');
 
-const checkpointPath = './';
+const checkpointPath = './src';
 const columnTitles = {
   classId: 'classId',
   instanceId: 'instanceId',
@@ -27,9 +27,9 @@ const columnTitles = {
 };
 
 const cpfiles = {
-  class: path.join(__dirname, `${checkpointPath}/.class.cp`),
-  data: path.join(__dirname, `${checkpointPath}/.data.cp`),
-  batch: path.join(__dirname, `${checkpointPath}/.batch.cp`),
+  class: path.resolve(`${checkpointPath}`, `.class.cp`),
+  data: path.resolve(`${checkpointPath}`, `.data.cp`),
+  batch: path.resolve(`${checkpointPath}`, `.batch.cp`),
 };
 
 const getCheckpointRecords = (file) => {
