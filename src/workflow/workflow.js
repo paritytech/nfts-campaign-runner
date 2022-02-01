@@ -399,7 +399,9 @@ const runWorkflow = async (configFile = './src/workflow.json') => {
     );
   }
   console.log('setting the context for the workflow ...');
+
   await loadContext(config);
+  let context = getContext();
 
   // 1- create class
   await createClass(config);
