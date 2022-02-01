@@ -404,29 +404,40 @@ const runWorkflow = async (configFile = './src/workflow.json') => {
   let context = getContext();
 
   // 1- create class
+  console.info('\n\nCreating the uniques class ...');
   await createClass(config);
 
   // 2- set classMetadata
+  console.info('\n\nSetting class metadata ...');
   await setClassMetadata(config);
 
   // 3- generate secrets
+  console.info('\n\nGenerating gift secrets ...');
   await generateGiftSecrets(config);
 
   //4- mint instances in batch
+  console.info('\n\nMinting nft instances ...');
   await mintInstancesInBatch(config);
 
   //5- pin images and generate metadata
+  console.info('\n\nUploading and pinning the nfts on IPFS ...');
   await pinAndSetImageCid(config);
 
   //6- set metadata for instances
+  console.info('\n\nSetting the instance metadata on chain ...');
   await setInstanceMetadata(config);
 
   //7-fund gift accounts with the initialFund amount.
+  console.info('\n\nSeeding the accouts with initial funds ...');
   await sendInitialFunds(config);
 
   // move the final data file to the output path, cleanup the checkpoint files.
   let outFilename = config?.instance?.data?.outputCsvFile;
   context.data.writeFinalResult(outFilename);
+  console.info(`\n\nThe final datafile is copied at \n ${outFilename}`);
+
+  // cleanup the workspace, remove checkpoint files
+  context.clean();
 };
 
 module.exports = {

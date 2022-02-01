@@ -76,7 +76,7 @@ const parseConfig = (cfile) => {
           let outDir = path.dirname(configJson.instance.data.csvFile);
           let ext = path.extname(configJson.instance.data.csvFile);
           let filename = path.basename(configJson.instance.data.csvFile, ext);
-          filename += ext ? `.final.${ext}` : `.final`;
+          filename += ext ? `.final${ext}` : `.final`;
           let outFilename = path.join(outDir, filename);
           configJson.instance.data.outputCsvFile = path.resolve(outFilename);
 

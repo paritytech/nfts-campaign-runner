@@ -19,10 +19,9 @@ program
   .then(() => process.exit(0))
   .catch((err) => {
     if (err instanceof WorkflowError) {
-      console.log(err?.message);
+      console.error(err?.message);
     } else {
-      console.log(err);
+      console.error(err);
     }
-
     process.exit(1);
   });

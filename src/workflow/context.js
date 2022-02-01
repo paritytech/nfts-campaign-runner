@@ -11,7 +11,12 @@ const {
 
 const { WorkflowError } = require('../Errors');
 
-const checkpointPath = './src';
+const checkpointBasePath = './';
+const checkpointFolderName = '.checkpoint';
+const checkpointFolderPath = path.resolve(
+  `${checkpointBasePath}`,
+  checkpointFolderName
+);
 const columnTitles = {
   classId: 'classId',
   instanceId: 'instanceId',
@@ -27,9 +32,9 @@ const columnTitles = {
 };
 
 const cpfiles = {
-  class: path.resolve(`${checkpointPath}`, `.class.cp`),
-  data: path.resolve(`${checkpointPath}`, `.data.cp`),
-  batch: path.resolve(`${checkpointPath}`, `.batch.cp`),
+  class: path.resolve(checkpointFolderPath, `.class.cp`),
+  data: path.resolve(checkpointFolderPath, `.data.cp`),
+  batch: path.resolve(checkpointFolderPath, `.batch.cp`),
 };
 
 const getCheckpointRecords = (file) => {
@@ -45,10 +50,25 @@ const context = {
   load: async function (wfConfig) {
     this.network = await connect(wfConfig?.network);
     this.pinataClient = createPinataClient(wfConfig?.pinata);
+
+    // Create checkpoint path if it does not exist
+    if (!fs.existsSync(checkpointFolderPath)) {
+      fs.mkdirSync(checkpointFolderPath);
+    }
     this.class.load(wfConfig);
     this.batch.load(wfConfig);
     this.data.load(wfConfig);
     this.isLoaded = true;
+  },
+  clean: function () {
+    try {
+      fs.unlinkSync(cpfiles.batch);
+      fs.unlinkSync(cpfiles.data);
+      fs.unlinkSync(cpfiles.class);
+      fs.rmdirSync(checkpointFolderPath);
+    } catch (err) {
+      console.error(err);
+    }
   },
   network: undefined,
   pinataClient: undefined,
