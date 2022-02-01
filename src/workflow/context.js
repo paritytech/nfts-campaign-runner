@@ -148,6 +148,10 @@ const context = {
     checkpoint: function () {
       writeCsvSync(cpfiles.data, this.header, this.records);
     },
+    writeFinalResult: function (outFilename) {
+      // copy the final datafile to the outputFile
+      fs.copyFileSync(cpfiles.data, outFilename);
+    },
   },
   batch: {
     lastMintBatch: 0,

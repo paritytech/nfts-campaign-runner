@@ -243,14 +243,13 @@ const pinAndSetImageCid = async (wfConfig) => {
 
     if (i >= startRecordNo && i < endRecordNo && !metaCidColumn.records[i]) {
       let imageFile = path.join(imageFolder, `${i + 2}.${extension}`);
+
       // fill template description to build the description string
       let instanceDescription = fillTemplateFromData(
         description,
         context.data.header,
         context.data.records[i]
       );
-
-      console.log(instanceDescription);
 
       const { metaCid, imageCid } = await generateMetadata(
         context.pinataClient,
@@ -394,6 +393,7 @@ const sendInitialFunds = async (wfConfig) => {
 const runWorkflow = async (configFile = './src/workflow.json') => {
   console.log('loading the workflow config ...');
   let { error, config } = parseConfig(configFile);
+
   if (error) {
     throw new WorkflowError(
       `there was an error while loading the worklow config: ${error}`
@@ -422,6 +422,10 @@ const runWorkflow = async (configFile = './src/workflow.json') => {
 
   //7-fund gift accounts with the initialFund amount.
   await sendInitialFunds(config);
+
+  // move the final data file to the output path, cleanup the checkpoint files.
+  let outFilename = config?.instance?.data?.outputCsvFile;
+  context.data.writeFinalResult(outFilename);
 };
 
 module.exports = {
