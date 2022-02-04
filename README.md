@@ -77,8 +77,8 @@ To run the workflow you need to execute the cli while passing a workflow configu
 uniqcamp <path to workflow.json>
 ```
 
-After the minted process is complate a final .csv data file which includes the gift secret codes will be generated at the same path as input datafile (specified by `instance.data.csvFile`)
+After the minted process is complete a final .csv data file which includes the gift secret codes will be generated at the same path as input datafile (specified by `instance.data.csvFile`)
 
-## Checkpionts
+## Checkpoints
 
-The workflow is checkpointed at each step, in case it is halted at any point during the process due to any failures, you can take it from where you left and continue it from the last successfull checkpoint by running the cli again.
+The workflow is checkpointed at each step, in case it is halted at any point during the process due to any failures, you can take it from where you left and continue it from the last successful checkpoint by running the cli again.

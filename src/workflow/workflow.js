@@ -31,7 +31,7 @@ const createClass = async (wfConfig) => {
     let uniquesClass = await api.query.uniques.class(cfgClassId);
     if (uniquesClass?.isSome) {
       // class already exists ask user if they want to mint in the same class
-      answer = (await inqAsk([
+      const answer = (await inqAsk([
         {
           type: 'confirm',
           name: 'appendToClass',
@@ -74,7 +74,7 @@ const setClassMetadata = async (wfConfig) => {
     // no class metadata is recorded in the checkpoint
     let metadata = wfConfig?.class?.metadata;
     if (!metadata) {
-      // no class metdata is configured. ask user if they want to configure a class metadata
+      // no class metadata is configured. ask user if they want to configure a class metadata
       let { withoutMetadata } = (await inqAsk([
         {
           type: 'confirm',
@@ -105,7 +105,7 @@ const generateGiftSecrets = async (wfConfig) => {
   // 3-create nft secrets + addresses
   let context = getContext();
   let keyring = context.network.keyring;
-  // ToDO: check if instanceOffset + instanceCount is out of bound (> data.length) throw an error
+  // TODO: check if instanceOffset + instanceCount is out of bound (> data.length) throw an error
   const [secretColumn, addressColumn] =
     context.data.getColumns([columnTitles.secret, columnTitles.address]) || [];
 
@@ -395,7 +395,7 @@ const runWorkflow = async (configFile = './src/workflow.json') => {
 
   if (error) {
     throw new WorkflowError(
-      `there was an error while loading the worklow config: ${error}`
+      `there was an error while loading the workflow config: ${error}`
     );
   }
   console.log('setting the context for the workflow ...');
@@ -428,7 +428,7 @@ const runWorkflow = async (configFile = './src/workflow.json') => {
   await setInstanceMetadata(config);
 
   //7-fund gift accounts with the initialFund amount.
-  console.info('\n\nSeeding the accouts with initial funds ...');
+  console.info('\n\nSeeding the accounts with initial funds ...');
   await sendInitialFunds(config);
 
   // move the final data file to the output path, cleanup the checkpoint files.

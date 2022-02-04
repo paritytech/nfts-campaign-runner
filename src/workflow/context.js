@@ -152,7 +152,7 @@ const context = {
       this.header = header;
       this.records = records;
 
-      // set satrt and end row numbers
+      // set start and end row numbers
       const instanceOffset = parseInt(wfConfig?.instance?.data?.offset)
         ? parseInt(wfConfig?.instance?.data?.offset) - 1
         : 0;

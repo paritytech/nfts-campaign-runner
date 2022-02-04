@@ -1,7 +1,7 @@
 const { Keyring } = require('@polkadot/keyring');
 const { ApiPromise, WsProvider } = require('@polkadot/api');
 
-// ToDO: verify seed is a valid mnemonic
+// TODO: verify seed is a valid mnemonic
 let signingPair;
 let api;
 let keyring;

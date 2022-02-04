@@ -103,5 +103,9 @@ dist
 # TernJS port file
 .tern-port
 
-# .data
+# IntelliJ IDE files
+.idea
+
+# Project files & folders
 data
+.checkpoint

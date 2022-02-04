@@ -16,7 +16,8 @@
     "@polkadot/util-crypto": "^8.3.3",
     "commander": "^8.3.0",
     "csv": "^6.0.5",
-    "inquirer": "^8.2.0"
+    "inquirer": "^8.2.0",
+    "lodash.get": "^4.4.2"
   },
   "devDependencies": {
     "@types/node": "^17.0.13",

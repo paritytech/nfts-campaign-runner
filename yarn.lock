@@ -2459,6 +2459,11 @@
   dependencies:
     "p-locate" "^4.1.0"
 
+"lodash.get@^4.4.2":
+  "integrity" "sha1-LRd/ZS+jHpObRDjVNBSZ36OCXpk="
+  "resolved" "https://registry.npmjs.org/lodash.get/-/lodash.get-4.4.2.tgz"
+  "version" "4.4.2"
+
 "lodash.set@^4.3.2":
   "integrity" "sha1-2HV7HagH3eJIFrDWqEvqGnYjCyM="
   "resolved" "https://registry.npmjs.org/lodash.set/-/lodash.set-4.3.2.tgz"

@@ -1,133 +1,67 @@
-const fs = require('fs');
 const path = require('path');
+const { validate, validateFileExists, validateElement, validateSection } = require('../utils/validation');
 
-let config;
 const parseConfig = (cfile) => {
-  let errors = {
-    section: (section, configFile) => {
-      return `No ${section} configuration was found for the workflow in configuration file: ${configFile}.`;
-    },
-    element: (element, configFile) => {
-      return `${element} is not configured in configuration file: ${configFile}.`;
-    },
-    pathNotExists: (name, path) => {
-      return `${name} does not exist at the configured path: ${path}.`;
-    },
-  };
   // resolve the path a relative path
   let configFile = path.resolve(cfile);
   let configJson;
-  if (!fs.existsSync(configFile)) {
-    return { error: errors.pathNotExists('workflow config', configFile) };
-  } else {
-    let jsonStr = fs.readFileSync(configFile);
-    configJson = JSON.parse(jsonStr);
 
-    if (!configJson) {
-      return {
-        error: `No workflow configuration was found in configuration file: ${configFile}`,
-      };
-    }
+  try {
+    validateFileExists(configFile, 'workflow config');
 
-    if (!configJson.network) {
-      return { error: errors.section('network', configFile) };
-    } else {
-      if (!configJson.network.provider) {
-        return { error: errors.element('network.provider', configFile) };
-      }
-      if (!configJson.network.accountSeed) {
-        return { error: errors.element('network.accountSeed', configFile) };
-      }
-    }
+    configJson = require(configFile);
+    validate(configJson, `No workflow configuration was found in configuration file: ${configFile}`);
 
-    if (!configJson.pinata) {
-      return { error: errors.section('pinata', configFile) };
-    } else {
-      if (!configJson.pinata.apiKey) {
-        return { error: errors.element('pinana.apiKey', configFile) };
-      }
-      if (!configJson.pinata.secretApiKey) {
-        return { error: errors.element('pinana.secretApiKey', configFile) };
-      }
-    }
+    // network
+    validateSection(configJson, 'network', configFile);
+    validateElement(configJson, 'network.provider', configFile);
+    validateElement(configJson, 'network.accountSeed', configFile);
 
-    if (!configJson.class) {
-      return { error: errors.section('class', configFile) };
-    } else {
-      if (!configJson.class.id) {
-        return { error: errors.element('class.id', configFile) };
-      }
-    }
+    // pinata
+    validateSection(configJson, 'pinata', configFile);
+    validateElement(configJson, 'pinata.apiKey', configFile);
+    validateElement(configJson, 'pinata.secretApiKey', configFile);
 
-    if (!configJson.instance) {
-      return { error: errors.section('instance', configFile) };
-    } else {
-      if (!configJson.instance.data) {
-        return { error: errors.section('instance.data', configFile) };
-      } else {
-        if (!configJson.instance.data.csvFile) {
-          return { error: errors.element('instance.data.csvFile', configFile) };
-        } else {
-          configJson.instance.data.csvFile = path.resolve(
-            configJson.instance.data.csvFile
-          );
+    // class
+    validateSection(configJson, 'class', configFile);
+    validateElement(configJson, 'class.id', configFile);
 
-          // set output path
-          let outDir = path.dirname(configJson.instance.data.csvFile);
-          let ext = path.extname(configJson.instance.data.csvFile);
-          let filename = path.basename(configJson.instance.data.csvFile, ext);
-          filename += ext ? `.final${ext}` : `.final`;
-          let outFilename = path.join(outDir, filename);
-          configJson.instance.data.outputCsvFile = path.resolve(outFilename);
+    // instance
+    validateSection(configJson, 'instance', configFile);
 
-          if (!fs.existsSync(configJson.instance.data.csvFile)) {
-            return {
-              error: errors.pathNotExists(
-                'instance.data.csvFile',
-                configJson.instance.data.csvFile
-              ),
-            };
-          }
-        }
-      }
+    // instance.data
+    validateSection(configJson, 'instance.data', configFile);
+    validateElement(configJson, 'instance.data.csvFile', configFile);
 
-      if (!configJson.instance.metadata) {
-        return { error: errors.section('instance.metadata', configFile) };
-      } else {
-        if (!configJson.instance.metadata.imageFolder) {
-          return {
-            error: errors.element('instance.metadata.imageFolder', configFile),
-          };
-        } else {
-          configJson.instance.metadata.imageFolder = path.resolve(
-            configJson.instance.metadata.imageFolder
-          );
-          if (!fs.existsSync(configJson.instance.metadata.imageFolder)) {
-            return {
-              error: errors.pathNotExists(
-                'instance.metadata.imageFolder',
-                configJson.instance.metadata.imageFolder
-              ),
-            };
-          }
-        }
-        if (!configJson.instance.metadata.extension) {
-          return {
-            error: errors.element('instance.metadata.extension', configFile),
-          };
-        }
-        if (!configJson.instance.metadata.name) {
-          return {
-            error: errors.element('instance.metadata.name', configFile),
-          };
-        }
-        if (!configJson.instance.metadata.description) {
-          return {
-            error: errors.element('instance.metadata.description', configFile),
-          };
-        }
-      }
-    }
+    configJson.instance.data.csvFile = path.resolve(
+      configJson.instance.data.csvFile
+    );
+
+    // set output path
+    let outDir = path.dirname(configJson.instance.data.csvFile);
+    let ext = path.extname(configJson.instance.data.csvFile);
+    let filename = path.basename(configJson.instance.data.csvFile, ext);
+    filename += ext ? `.final${ext}` : `.final`;
+    let outFilename = path.join(outDir, filename);
+    configJson.instance.data.outputCsvFile = path.resolve(outFilename);
+
+    validateFileExists(configJson.instance.data.csvFile, 'instance.data.csvFile');
+
+    // instance.metadata
+    validateSection(configJson, 'instance.metadata', configFile);
+    validateElement(configJson, 'instance.metadata.imageFolder', configFile);
+
+    configJson.instance.metadata.imageFolder = path.resolve(
+      configJson.instance.metadata.imageFolder
+    );
+
+    validateFileExists(configJson.instance.metadata.imageFolder, 'instance.metadata.imageFolder');
+
+    validateElement(configJson, 'instance.metadata.extension', configFile);
+    validateElement(configJson, 'instance.metadata.name', configFile);
+    validateElement(configJson, 'instance.metadata.description', configFile);
+  } catch (error) {
+    return { error: error.message ?? error.toString() };
   }
 
   return { config: configJson };
