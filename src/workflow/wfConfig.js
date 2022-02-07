@@ -1,5 +1,6 @@
+const fs = require('fs');
 const path = require('path');
-const { validate, validateFileExists, validateElement, validateSection } = require('../utils/validation');
+const { validate, validateFileAccess, validateFileExists, validateElement, validateSection } = require('../utils/validation');
 
 const parseConfig = (cfile) => {
   // resolve the path a relative path
@@ -25,6 +26,9 @@ const parseConfig = (cfile) => {
     // class
     validateSection(configJson, 'class', configFile);
     validateElement(configJson, 'class.id', configFile);
+    if (configJson.class.metadata?.imageFile) {
+      validateFileExists(path.resolve(configJson.class.metadata.imageFile), 'class.metadata.imageFile');
+    }
 
     // instance
     validateSection(configJson, 'instance', configFile);
@@ -46,6 +50,7 @@ const parseConfig = (cfile) => {
     configJson.instance.data.outputCsvFile = path.resolve(outFilename);
 
     validateFileExists(configJson.instance.data.csvFile, 'instance.data.csvFile');
+    validateFileAccess(outDir, 'write');
 
     // instance.metadata
     const instanceMetadata = configJson.instance.metadata;

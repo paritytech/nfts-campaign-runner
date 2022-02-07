@@ -1,6 +1,6 @@
-const { WorkflowError } = require('../Errors');
 const get = require('lodash.get');
 const fs = require('fs');
+const { WorkflowError } = require('../Errors');
 
 const errors = {
   section: (section, configFile) => {
@@ -11,6 +11,9 @@ const errors = {
   },
   pathNotExists: (name, path) => {
     return `${name} does not exist at the configured path: ${path}.`;
+  },
+  pathHasWrongAccess: (path, accessLevel) => {
+    return `${path} does not have the right access: ${accessLevel}.`;
   },
 };
 
@@ -43,4 +46,19 @@ const validateFileExists = (filePath, errorText) => {
   }
 };
 
-module.exports = { throwError, validate, validateFileExists, validateElement, validateSection };
+const validateFileAccess = (filePath, accessLevel = 'default') => {
+  const ACCESS_LEVELS = {
+    read: fs.constants.R_OK,
+    write: fs.constants.W_OK,
+    execute: fs.constants.X_OK,
+    default: fs.constants.F_OK,
+  };
+
+  try {
+    fs.accessSync(filePath, ACCESS_LEVELS[accessLevel]);
+  } catch {
+    throwError(errors.pathHasWrongAccess(filePath, accessLevel));
+  }
+};
+
+module.exports = { throwError, validate, validateFileAccess, validateFileExists, validateElement, validateSection };

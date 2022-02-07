@@ -53,7 +53,11 @@ const context = {
 
     // Create checkpoint path if it does not exist
     if (!fs.existsSync(checkpointFolderPath)) {
-      fs.mkdirSync(checkpointFolderPath);
+      try {
+        fs.mkdirSync(checkpointFolderPath);
+      } catch {
+        throw new WorkflowError(`Unable to create ${checkpointFolderPath} folder. Please check if the parent dir has a write access`);
+      }
     }
     this.class.load(wfConfig);
     this.batch.load(wfConfig);
@@ -215,10 +219,12 @@ const loadContext = async (wfConfig) => {
   await context.load(wfConfig);
   return context;
 };
+
 const getContext = () => {
   if (!context.isLoaded) {
     throw new WorkflowError('The context for the workflow is not loaded.');
   }
   return context;
 };
+
 module.exports = { columnTitles: columnTitles, loadContext, getContext };
