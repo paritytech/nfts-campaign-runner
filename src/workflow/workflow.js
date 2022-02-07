@@ -1,6 +1,7 @@
 const inquirer = require('inquirer');
 const fs = require('fs');
 const path = require('path');
+const BN = require('bn.js');
 const {
   generateAndSetClassMetadata,
   generateMetadata,
@@ -395,6 +396,22 @@ const sendInitialFunds = async (wfConfig) => {
   }
 };
 
+const verifyWorkflow = async (wfConfig) => {
+  const initialFund = wfConfig?.instance?.initialFund;
+
+  const context = getContext();
+  const { api } = context.network;
+
+  if (initialFund) {
+    const { existentialDeposit } = api.consts.balances;
+    if (existentialDeposit.gt(new BN(initialFund))) {
+      throw new WorkflowError(
+        `instance.initialFund should be bigger than existential deposit (${existentialDeposit.toNumber()})`
+      );
+    }
+  }
+};
+
 const runWorkflow = async (configFile = './src/workflow.json') => {
   console.log('loading the workflow config ...');
   let { error, config } = parseConfig(configFile);
@@ -408,6 +425,9 @@ const runWorkflow = async (configFile = './src/workflow.json') => {
 
   await loadContext(config);
   let context = getContext();
+
+  // 0- run various checks
+  await verifyWorkflow(config);
 
   // 1- create class
   console.info('\n\nCreating the uniques class ...');

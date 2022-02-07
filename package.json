@@ -14,6 +14,7 @@
     "@polkadot/api": "^7.5.1",
     "@polkadot/keyring": "^8.3.3",
     "@polkadot/util-crypto": "^8.3.3",
+    "bn.js": "^5.2.0",
     "commander": "^8.3.0",
     "csv": "^6.0.5",
     "inquirer": "^8.2.0",
