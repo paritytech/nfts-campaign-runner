@@ -48,18 +48,21 @@ const parseConfig = (cfile) => {
     validateFileExists(configJson.instance.data.csvFile, 'instance.data.csvFile');
 
     // instance.metadata
-    validateSection(configJson, 'instance.metadata', configFile);
-    validateElement(configJson, 'instance.metadata.imageFolder', configFile);
+    const instanceMetadata = configJson.instance.metadata;
+    if (instanceMetadata && typeof instanceMetadata === 'object' && Object.keys(instanceMetadata).length) {
+      validateSection(configJson, 'instance.metadata', configFile);
+      validateElement(configJson, 'instance.metadata.imageFolder', configFile);
 
-    configJson.instance.metadata.imageFolder = path.resolve(
-      configJson.instance.metadata.imageFolder
-    );
+      configJson.instance.metadata.imageFolder = path.resolve(
+        configJson.instance.metadata.imageFolder
+      );
 
-    validateFileExists(configJson.instance.metadata.imageFolder, 'instance.metadata.imageFolder');
+      validateFileExists(configJson.instance.metadata.imageFolder, 'instance.metadata.imageFolder');
 
-    validateElement(configJson, 'instance.metadata.extension', configFile);
-    validateElement(configJson, 'instance.metadata.name', configFile);
-    validateElement(configJson, 'instance.metadata.description', configFile);
+      validateElement(configJson, 'instance.metadata.extension', configFile);
+      validateElement(configJson, 'instance.metadata.name', configFile);
+      validateElement(configJson, 'instance.metadata.description', configFile);
+    }
   } catch (error) {
     return { error: error.message ?? error.toString() };
   }
