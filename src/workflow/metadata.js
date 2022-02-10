@@ -1,4 +1,5 @@
 const { signAndSendTx } = require('../chain/txHandler');
+const { WorkflowError } = require('../Errors');
 const fs = require('fs');
 const path = require('path');
 

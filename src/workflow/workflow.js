@@ -16,6 +16,7 @@ const inqAsk = inquirer.createPromptModule();
 const { parseConfig } = require('./wfConfig');
 const { WorkflowError } = require('../Errors');
 const { fillTemplateFromData } = require('../utils/csv');
+const { isNumber } = require('../utils');
 
 const createClass = async (wfConfig) => {
   // 1- create class
@@ -198,7 +199,7 @@ const mintInstancesInBatch = async (wfConfig) => {
       instanceIdColumn.records.push('');
     }
     if (i >= startRecordNo && i < endRecordNo) {
-      instanceIdColumn.records[i] = currentInstanceId + 1;
+      instanceIdColumn.records[i] = currentInstanceId;
       currentInstanceId += 1;
     }
   }
@@ -271,7 +272,11 @@ const pinAndSetImageCid = async (wfConfig) => {
 const setInstanceMetadata = async (wfConfig) => {
   // 6- set metadata for instances
   const instanceMetadata = wfConfig.instance.metadata;
-  if (!instanceMetadata && typeof instanceMetadata !== 'object' && !Object.keys(instanceMetadata).length) {
+  if (
+    !instanceMetadata &&
+    typeof instanceMetadata !== 'object' &&
+    !Object.keys(instanceMetadata).length
+  ) {
     console.log('Skipped! No instance metadata is configured for the workflow');
     return;
   }
@@ -301,9 +306,8 @@ const setInstanceMetadata = async (wfConfig) => {
   }
 
   if (
-    !instanceIdColumn.records ||
-    !instanceIdColumn.records[startRecordNo] ||
-    !instanceIdColumn.records[endRecordNo - 1]
+    !isNumber(instanceIdColumn?.records?.[startRecordNo]) ||
+    !isNumber(instanceIdColumn?.records?.[endRecordNo - 1])
   ) {
     throw new WorkflowError(
       'No instanceId checkpoint is recorded or the checkpoint is not in a correct state.'

@@ -1,5 +1,6 @@
 const fs = require('fs');
 const { randomAsHex } = require('@polkadot/util-crypto');
+const { WorkflowError } = require('../Errors');
 
 const generateSecret = async (keyring) => {
   if (!keyring) {

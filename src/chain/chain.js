@@ -1,5 +1,6 @@
 const { Keyring } = require('@polkadot/keyring');
 const { ApiPromise, WsProvider } = require('@polkadot/api');
+const { WorkflowError } = require('../Errors');
 
 // TODO: verify seed is a valid mnemonic
 let signingPair;
