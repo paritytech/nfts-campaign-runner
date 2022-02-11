@@ -10,7 +10,7 @@ const {
 const { generateSecret } = require('./giftSecrets');
 const { mintClassInstances } = require('./mint');
 const { transferFunds } = require('./balanceTransfer');
-const { columnTitles, loadContext, getContext } = require('./context');
+const { columnTitles, checkPreviousCheckpoints, loadContext, getContext } = require('./context');
 const { signAndSendTx } = require('../chain/txHandler');
 const inqAsk = inquirer.createPromptModule();
 const { parseConfig } = require('./wfConfig');
@@ -22,14 +22,15 @@ const createClass = async (wfConfig) => {
   // 1- create class
   const context = getContext();
   const { api, signingPair, proxiedAddress } = context.network;
+
   if (!wfConfig.class?.id) {
     throw new WorkflowError('No class id was found in workflow setting!');
   }
 
   // if a valid class is not already created or does not exist, create the class
-  if (context.class.id == undefined || wfConfig.class?.id != context.class.id) {
+  if (context.class.id === undefined || wfConfig.class?.id !== context.class.id) {
     // check the specified class does not exist
-    let cfgClassId = wfConfig.class?.id;
+    let cfgClassId = wfConfig.class.id;
     let uniquesClass = await api.query.uniques.class(cfgClassId);
     if (uniquesClass?.isSome) {
       // class already exists ask user if they want to mint in the same class
@@ -66,7 +67,7 @@ const setClassMetadata = async (wfConfig) => {
   // 2-generate/set class metadata
   const context = getContext();
 
-  if (context.class.id == undefined) {
+  if (context.class.id === undefined) {
     throw new WorkflowError(
       'No class.id checkpoint is recorded or the checkpoint is not in correct state'
     );
@@ -453,6 +454,7 @@ const runWorkflow = async (configFile = './src/workflow.json') => {
   }
   console.log('setting the context for the workflow ...');
 
+  await checkPreviousCheckpoints();
   await loadContext(config);
   let context = getContext();
 

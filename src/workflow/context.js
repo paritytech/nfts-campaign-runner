@@ -1,15 +1,17 @@
 const fs = require('fs');
+const inquirer = require('inquirer');
+const path = require('path');
 const { connect } = require('../chain/chain');
 const { createPinataClient } = require('../pinata/pinataClient');
-const path = require('path');
 const {
   writeCsvSync,
   readCsvSync,
   getColumnIndex,
   getColumns,
 } = require('../utils/csv');
-
 const { WorkflowError } = require('../Errors');
+
+const inqAsk = inquirer.createPromptModule();
 
 const checkpointBasePath = './';
 const checkpointFolderName = '.checkpoint';
@@ -45,6 +47,17 @@ const getCheckpointRecords = (file) => {
   }
 };
 
+const removeCheckpoints = () => {
+  try {
+    if (fs.existsSync(cpfiles.batch)) fs.unlinkSync(cpfiles.batch);
+    if (fs.existsSync(cpfiles.data)) fs.unlinkSync(cpfiles.data);
+    if (fs.existsSync(cpfiles.class)) fs.unlinkSync(cpfiles.class);
+    if (fs.existsSync(checkpointFolderPath)) fs.rmdirSync(checkpointFolderPath);
+  } catch (err) {
+    console.error(err);
+  }
+};
+
 const context = {
   isLoaded: false,
   load: async function (wfConfig) {
@@ -59,20 +72,15 @@ const context = {
         throw new WorkflowError(`Unable to create ${checkpointFolderPath} folder. Please check if the parent dir has a write access`);
       }
     }
+
     this.class.load(wfConfig);
     this.batch.load(wfConfig);
     this.data.load(wfConfig);
+
     this.isLoaded = true;
   },
   clean: function () {
-    try {
-      fs.unlinkSync(cpfiles.batch);
-      fs.unlinkSync(cpfiles.data);
-      fs.unlinkSync(cpfiles.class);
-      fs.rmdirSync(checkpointFolderPath);
-    } catch (err) {
-      console.error(err);
-    }
+    removeCheckpoints();
   },
   network: undefined,
   pinataClient: undefined,
@@ -147,7 +155,7 @@ const context = {
           `The configured datafile does not exists. Please check if path: ${datafile} exists`
         );
       }
-      // copy file to checkpoint path if checkpoiint does not already exist
+      // copy file to checkpoint path if checkpoint does not already exist
       if (!fs.existsSync(cpfiles.data)) {
         fs.copyFileSync(datafile, cpfiles.data);
       }
@@ -227,4 +235,22 @@ const getContext = () => {
   return context;
 };
 
-module.exports = { columnTitles: columnTitles, loadContext, getContext };
+const checkPreviousCheckpoints = async () => {
+  const checkpointExists = fs.existsSync(cpfiles.class) || fs.existsSync(cpfiles.batch) || fs.existsSync(cpfiles.data);
+  if (!checkpointExists) return;
+
+  const answer = (await inqAsk([
+    {
+      type: 'confirm',
+      name: 'continueFromCheckpoint',
+      message: `Previous checkpoints detected, do you want to continue from the last recorded checkpoint?`,
+      default: true,
+    },
+  ])) || { continueFromCheckpoint: true };
+
+  if (answer?.continueFromCheckpoint) return;
+
+  removeCheckpoints();
+}
+
+module.exports = { columnTitles: columnTitles, checkPreviousCheckpoints, loadContext, getContext };
