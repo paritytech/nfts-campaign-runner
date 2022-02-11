@@ -1,4 +1,3 @@
-const fs = require('fs');
 const path = require('path');
 const { validate, validateFileAccess, validateFileExists, validateElement, validateSection } = require('../utils/validation');
 
@@ -56,15 +55,17 @@ const parseConfig = (cfile) => {
     const instanceMetadata = configJson.instance.metadata;
     if (instanceMetadata && typeof instanceMetadata === 'object' && Object.keys(instanceMetadata).length) {
       validateSection(configJson, 'instance.metadata', configFile);
-      validateElement(configJson, 'instance.metadata.imageFolder', configFile);
+      validateElement(configJson, 'instance.metadata.imageFile', configFile);
 
-      configJson.instance.metadata.imageFolder = path.resolve(
-        configJson.instance.metadata.imageFolder
-      );
+      const parts = instanceMetadata.imageFile.split('/');
+      const fileNameTemplate = parts.pop();
+      const imageFolder = parts.join('/');
 
-      validateFileExists(configJson.instance.metadata.imageFolder, 'instance.metadata.imageFolder');
+      configJson.instance.metadata.imageFolder = path.resolve(imageFolder);
+      configJson.instance.metadata.fileNameTemplate = fileNameTemplate;
 
-      validateElement(configJson, 'instance.metadata.extension', configFile);
+      validateFileExists(configJson.instance.metadata.imageFolder, 'instance.metadata.imageFile');
+
       validateElement(configJson, 'instance.metadata.name', configFile);
       validateElement(configJson, 'instance.metadata.description', configFile);
     }

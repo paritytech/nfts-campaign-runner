@@ -52,8 +52,7 @@ To define your workflow you need to provide the cli with a workflow.json based o
     Make sure it is above the Existential Deposit(ED) of the chain!>",
     "batchSize": "<the number of transactions that are being sent in a batch. default to 100 if not specified>",
     "metadata": {
-      "imageFolder": "<the path to the media folder that contains the NFT media files>",
-      "extension": "<the extension of the media files that are going to be minted>",
+      "imageFile": "<the full path to the media file that contains the NFT media file>",
       "name": "the value for the name field in the instance metadata",
       "description": "the value for the description field in the instance metadata"
     }
@@ -67,7 +66,9 @@ Note:
 - The data file specified by `instance.data.csvFile` is a csv file, which the number of rows in the file specifies the maximum number of instances that can be minted. If specified, the combination of offset and count determines the actual number of instances that are going to be minted.
 - The offset specifies the first row number in the csv datafile that the instances will be minted from that row up to the specified count.
 - If the calculated row numbers fall outside of the number of rows in the csv file (e.x. `offset+count-1 > last_row_number_in_the_file`) the minting will stop after the last row number.
-- The `instance.metadata.extension` specifies the extension for the media files and the `instance.metadata.imageFolder` specifies the folder that contains the media files that are going to be minted. the files in that folder should be named according to the row number in the csv datafile. e.x. for `extension: "jpg"` the file `<imageFolder>/1.jpg` will be minted for the first row and `<imageFolder>/2.jpg` for the second row and and so on.
+- The `instance.metadata.imageFile` specifies the file path that contains the media file that is going to be minted. 
+Path example: `/Users/user/nfts/<<image name>>.png` where `<<image name>>` will be replaced with the value in the "image name" column according to the row number in the csv datafile. 
+Additionally, you can use that template: `/Users/user/nfts/<>.png` in which the '<>' will be replaced with the row number. 
 
 ## Running a workflow
 

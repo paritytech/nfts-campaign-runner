@@ -16,7 +16,7 @@ const inqAsk = inquirer.createPromptModule();
 const { parseConfig } = require('./wfConfig');
 const { WorkflowError } = require('../Errors');
 const { fillTemplateFromData } = require('../utils/csv');
-const { isNumber } = require('../utils');
+const { isNumber, isEmptyObject } = require('../utils');
 
 const createClass = async (wfConfig) => {
   // 1- create class
@@ -207,28 +207,23 @@ const mintInstancesInBatch = async (wfConfig) => {
   context.data.checkpoint();
 };
 
+const formatFileName = (fileNameTemplate, rowNumber, { header, records }) => {
+  if (fileNameTemplate.includes('<>')) {
+    return fileNameTemplate.replace('<>', rowNumber);
+  }
+
+  return fillTemplateFromData(fileNameTemplate, header, records);
+}
+
 const pinAndSetImageCid = async (wfConfig) => {
   // 5- pin images and generate metadata
   let context = getContext();
   const { startRecordNo, endRecordNo } = context.data;
 
-  const { name, description, imageFolder, extension } =
-    wfConfig?.instance?.metadata;
-  if (!fs.existsSync(imageFolder)) {
-    throw new WorkflowError(
-      `The instance image folder :${imageFolder} does not exist!`
-    );
-  }
-  for (let i = startRecordNo; i < endRecordNo; i++) {
-    // check the image files exist
-    let imageFile = path.join(imageFolder, `${i + 2}.${extension}`);
-    if (!fs.existsSync(imageFile)) {
-      // ToDo: instead of throwing ask if the user wants to continue by skipping minting for those rows
-      throw new WorkflowError(
-        `imageFile: ${imageFile} does not exist to be minted for row:${i + 2}`
-      );
-    }
-  }
+  const instanceMetadata = wfConfig?.instance?.metadata;
+  if (isEmptyObject(instanceMetadata)) return;
+
+  const { name, description, imageFolder, fileNameTemplate } = instanceMetadata;
 
   const [imageCidColumn, metaCidColumn] = context.data.getColumns([
     columnTitles.imageCid,
@@ -244,7 +239,13 @@ const pinAndSetImageCid = async (wfConfig) => {
     }
 
     if (i >= startRecordNo && i < endRecordNo && !metaCidColumn.records[i]) {
-      let imageFile = path.join(imageFolder, `${i + 2}.${extension}`);
+      let imageFileName = formatFileName(
+        fileNameTemplate,
+        i + 2,
+        { header: context.data.header, records: context.data.records[i]},
+      );
+      let imageFile = path.join(imageFolder, imageFileName);
+
       // fill template description to build the description string
       let instanceDescription = fillTemplateFromData(
         description,
@@ -405,13 +406,38 @@ const verifyWorkflow = async (wfConfig) => {
 
   const context = getContext();
   const { api } = context.network;
+  const { startRecordNo, endRecordNo } = context.data;
 
+  // validate initial fund
   if (initialFund) {
     const { existentialDeposit } = api.consts.balances;
     if (existentialDeposit.gt(new BN(initialFund))) {
       throw new WorkflowError(
         `instance.initialFund should be bigger than existential deposit (${existentialDeposit.toNumber()})`
       );
+    }
+  }
+
+  // check image files
+  const instanceMetadata = wfConfig?.instance?.metadata;
+  if (!isEmptyObject(instanceMetadata)) {
+    const { imageFolder, fileNameTemplate } = instanceMetadata;
+
+    for (let i = startRecordNo; i < endRecordNo; i++) {
+      if (!context.data.records[i]) continue;
+
+      const imageFileName = formatFileName(
+        fileNameTemplate,
+        i + 2,
+        { header: context.data.header, records: context.data.records[i]},
+      );
+      const imageFile = path.join(imageFolder, imageFileName);
+
+      if (!fs.existsSync(imageFile)) {
+        throw new WorkflowError(
+          `imageFile: ${imageFile} does not exist to be minted for row: ${i + 2}`
+        );
+      }
     }
   }
 };
