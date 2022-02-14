@@ -2,6 +2,7 @@
 
 const { Command } = require('commander');
 const { runWorkflow } = require('./workflow/workflow');
+const { WorkflowError } = require('./Errors');
 const program = new Command();
 
 program.version('0.0.1');
