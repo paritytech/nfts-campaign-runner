@@ -61,4 +61,11 @@ const validateFileAccess = (filePath, accessLevel = 'default') => {
   }
 };
 
-module.exports = { throwError, validate, validateFileAccess, validateFileExists, validateElement, validateSection };
+module.exports = {
+  throwError,
+  validate,
+  validateFileAccess,
+  validateFileExists,
+  validateElement,
+  validateSection,
+};

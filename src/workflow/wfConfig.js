@@ -1,5 +1,12 @@
 const path = require('path');
-const { validate, validateFileAccess, validateFileExists, validateElement, validateSection } = require('../utils/validation');
+const { isEmptyObject } = require('../utils');
+const {
+  validate,
+  validateFileAccess,
+  validateFileExists,
+  validateElement,
+  validateSection,
+} = require('../utils/validation');
 
 const parseConfig = (cfile) => {
   // resolve the path a relative path
@@ -53,7 +60,7 @@ const parseConfig = (cfile) => {
 
     // instance.metadata
     const instanceMetadata = configJson.instance.metadata;
-    if (instanceMetadata && typeof instanceMetadata === 'object' && Object.keys(instanceMetadata).length) {
+    if (!isEmptyObject(instanceMetadata)) {
       validateSection(configJson, 'instance.metadata', configFile);
       validateElement(configJson, 'instance.metadata.imageFile', configFile);
 

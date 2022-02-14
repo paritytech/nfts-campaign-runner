@@ -1,6 +1,6 @@
 const { signAndSendTx } = require('../chain/txHandler');
 
-let transferFunds = async (network, owners, amount) => {
+let transferFunds = async (network, owners, amount, dryRun) => {
   const { api, signingPair, proxiedAddress } = network;
 
   let txs = [];
@@ -12,8 +12,7 @@ let transferFunds = async (network, owners, amount) => {
   let call = proxiedAddress
     ? api.tx.proxy.proxy(proxiedAddress, 'Assets', txBatch)
     : txBatch;
-  await signAndSendTx(api, call, signingPair);
-  console.log(call.toHuman());
+  await signAndSendTx(api, call, signingPair, true, dryRun);
 };
 
 module.exports = { transferFunds };

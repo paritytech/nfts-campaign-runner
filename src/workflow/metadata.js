@@ -1,7 +1,7 @@
-const { signAndSendTx } = require('../chain/txHandler');
-const { WorkflowError } = require('../Errors');
 const fs = require('fs');
 const path = require('path');
+const { signAndSendTx } = require('../chain/txHandler');
+const { WorkflowError } = require('../Errors');
 
 const generateMetadata = async (pinataClient, name, description, imageFile) => {
   // pin image
@@ -25,7 +25,7 @@ const generateMetadata = async (pinataClient, name, description, imageFile) => {
     throw new WorkflowError(`failed to pin image.`);
   }
 
-  // create metatdata
+  // create metadata
   let metadata = {
     name: name,
     image: `ipfs://ipfs/${imageCid}`,
@@ -34,7 +34,7 @@ const generateMetadata = async (pinataClient, name, description, imageFile) => {
 
   let metadataStr = JSON.stringify(metadata, null, 2);
 
-  // save matadat in the file
+  // save metadata in the file
   fs.writeFileSync(metaPath, metadataStr, { encoding: 'utf8' });
 
   // pin metadata
@@ -46,7 +46,7 @@ const generateMetadata = async (pinataClient, name, description, imageFile) => {
   return { metaCid, imageCid };
 };
 
-let setMetadataInBatch = async (connection, classId, instanceMetaCids) => {
+let setMetadataInBatch = async (connection, classId, instanceMetaCids, dryRun) => {
   const { api, signingPair, proxiedAddress } = await connection;
 
   let txs = [];
@@ -59,11 +59,10 @@ let setMetadataInBatch = async (connection, classId, instanceMetaCids) => {
   let call = proxiedAddress
     ? api.tx.proxy.proxy(proxiedAddress, 'Assets', txBatch)
     : txBatch;
-  await signAndSendTx(api, call, signingPair);
-  console.log(call.toHuman());
+  await signAndSendTx(api, call, signingPair, true, dryRun);
 };
 
-let setClassMetadata = async (connection, classId, metadataCid) => {
+let setClassMetadata = async (connection, classId, metadataCid, dryRun) => {
   const { api, signingPair, proxiedAddress } = connection;
   let tx = api.tx.uniques.setClassMetadata(classId, metadataCid, false);
 
@@ -71,7 +70,7 @@ let setClassMetadata = async (connection, classId, metadataCid) => {
     ? api.tx.proxy.proxy(proxiedAddress, 'Assets', tx)
     : tx;
   console.log(`sending tx with hash ${tx.toHex()}`);
-  await signAndSendTx(api, txCall, signingPair);
+  await signAndSendTx(api, txCall, signingPair, true, dryRun);
 };
 
 const generateAndSetClassMetadata = async (
@@ -81,13 +80,16 @@ const generateAndSetClassMetadata = async (
   metadata
 ) => {
   let { name, description, imageFile } = metadata;
-  let { metaCid } = await generateMetadata(
+
+  const { metaCid } = await generateMetadata(
     pinataClient,
     name,
     description,
     imageFile
   );
+
   await setClassMetadata(connection, classId, metaCid);
+
   return metaCid;
 };
 

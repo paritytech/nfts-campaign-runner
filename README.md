@@ -78,6 +78,12 @@ To run the workflow you need to execute the cli while passing a workflow configu
 uniqcamp <path to workflow.json>
 ```
 
+There is an optional parameter available for the dry-run. It will validate the workflow without submitting transactions.
+
+```
+uniqcamp <path to workflow.json> --dry-run
+```
+
 After the minted process is complete a final .csv data file which includes the gift secret codes will be generated at the same path as input datafile (specified by `instance.data.csvFile`)
 
 ## Checkpoints

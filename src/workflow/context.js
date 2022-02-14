@@ -83,6 +83,7 @@ const context = {
     removeCheckpoints();
   },
   network: undefined,
+  dryRun: false,
   pinataClient: undefined,
   class: {
     id: undefined,

@@ -1,6 +1,6 @@
 const { signAndSendTx } = require('../chain/txHandler');
 
-let mintClassInstances = async (network, classId, startInstanceId, owners) => {
+let mintClassInstances = async (network, classId, startInstanceId, owners, dryRun) => {
   const { api, signingPair, proxiedAddress } = network;
 
   let instanceId = startInstanceId || 0;
@@ -14,8 +14,9 @@ let mintClassInstances = async (network, classId, startInstanceId, owners) => {
   let call = proxiedAddress
     ? api.tx.proxy.proxy(proxiedAddress, 'Assets', txBatch)
     : txBatch;
-  await signAndSendTx(api, call, signingPair);
-  console.log(call.toHuman());
+  await signAndSendTx(api, call, signingPair, true, dryRun);
+
+  if (!dryRun) console.log(call.toHuman());
 };
 
 module.exports = { mintClassInstances };

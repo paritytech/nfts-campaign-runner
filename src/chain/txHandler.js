@@ -23,7 +23,7 @@ const decodeResult = (api, result) => {
   return { success, events, error };
 };
 
-exports.signAndSendTx = async (api, tx, signingPair, finalize = true) => {
+exports.signAndSendTx = async (api, tx, signingPair, finalize = true, dryRun = false) => {
   return new Promise((resolve, reject) => {
     let cb = ({ success, events, error }) => {
       if (!success) {
@@ -33,6 +33,16 @@ exports.signAndSendTx = async (api, tx, signingPair, finalize = true) => {
     };
     let signAndSendAsync = async () => {
       try {
+        if (dryRun) {
+          const check = await tx.dryRun(signingPair);
+          const error = check.isError ? check.asError : null;
+          if (check.isOk) {
+            console.log(`tx simulation succeeded`);
+          }
+          cb({ success: check.isOk, events: [], error });
+          return;
+        }
+
         let dispatchResult;
         const unsub = await tx.signAndSend(signingPair, (callResult) => {
           const { status, ...result } = callResult;
