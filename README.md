@@ -38,6 +38,7 @@ To define your workflow you need to provide the cli with a workflow.json based o
     "id": "<classId that the NFT instances are being minted in>",
     "metadata": {
       "imageFile": "<Path to the image file that is used for class metadata>",
+      "videoFile": "<Path to the video file that is used for class metadata>",
       "name": "<the value for the name field in class metadata>",
       "description": "the value for the description field in class metadata"
     }
@@ -52,7 +53,8 @@ To define your workflow you need to provide the cli with a workflow.json based o
     Make sure it is above the Existential Deposit(ED) of the chain!>",
     "batchSize": "<the number of transactions that are being sent in a batch. default to 100 if not specified>",
     "metadata": {
-      "imageFile": "<the full path to the media file that contains the NFT media file>",
+      "imageFile": "<the full path to the media file that contains the NFT image file>",
+      "videoFile": "<the full path to the media file that contains the NFT video file>",
       "name": "the value for the name field in the instance metadata",
       "description": "the value for the description field in the instance metadata"
     }
@@ -68,7 +70,8 @@ Note:
 - If the calculated row numbers fall outside of the number of rows in the csv file (e.x. `offset+count-1 > last_row_number_in_the_file`) the minting will stop after the last row number.
 - The `instance.metadata.imageFile` specifies the file path that contains the media file that is going to be minted. 
 Path example: `/Users/user/nfts/<<image name>>.png` where `<<image name>>` will be replaced with the value in the "image name" column according to the row number in the csv datafile. 
-Additionally, you can use that template: `/Users/user/nfts/<>.png` in which the '<>' will be replaced with the row number. 
+Additionally, you can use this template: `/Users/user/nfts/<>.png` in which the '<>' will be replaced with the row number. 
+- The `instance.metadata.videoFile` specifies the file path that contains the video file that is going to be minted. Has the same naming format as `instance.metadata.imageFile`. 
 
 ## Running a workflow
 

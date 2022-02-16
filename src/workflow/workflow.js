@@ -222,50 +222,76 @@ const pinAndSetImageCid = async (wfConfig) => {
   const instanceMetadata = wfConfig?.instance?.metadata;
   if (isEmptyObject(instanceMetadata)) return;
 
-  const { name, description, imageFolder, fileNameTemplate } = instanceMetadata;
+  const {
+    name,
+    description,
+    imageFolder,
+    imageFileNameTemplate,
+    videoFolder,
+    videoFileNameTemplate,
+  } = instanceMetadata;
 
-  const [imageCidColumn, metaCidColumn] = context.data.getColumns([
+  const [imageCidColumn, metaCidColumn, videoCidColumn] = context.data.getColumns([
     columnTitles.imageCid,
     columnTitles.metaCid,
+    columnTitles.videoCid,
   ]);
   let isUpdated = false;
   for (let i = 0; i < context.data.records.length; i++) {
     if (i >= imageCidColumn.records.length) {
       imageCidColumn.records.push('');
     }
+    if (i >= videoCidColumn.records.length) {
+      videoCidColumn.records.push('');
+    }
     if (i >= metaCidColumn.records.length) {
       metaCidColumn.records.push('');
     }
 
     if (i >= startRecordNo && i < endRecordNo && !metaCidColumn.records[i]) {
-      let imageFileName = formatFileName(
-        fileNameTemplate,
-        i + 2,
-        { header: context.data.header, records: context.data.records[i]},
-      );
-      let imageFile = path.join(imageFolder, imageFileName);
+      let imageFile;
+      if (imageFileNameTemplate) {
+        const imageFileName = formatFileName(
+          imageFileNameTemplate,
+          i + 2,
+          { header: context.data.header, records: context.data.records[i] },
+        );
+        imageFile = path.join(imageFolder, imageFileName);
+      }
+
+      let videoFile;
+      if (videoFileNameTemplate) {
+        const videoFileName = formatFileName(
+          videoFileNameTemplate,
+          i + 2,
+          { header: context.data.header, records: context.data.records[i]},
+        );
+        videoFile = path.join(videoFolder, videoFileName);
+      }
 
       // fill template description to build the description string
-      let instanceDescription = fillTemplateFromData(
+      const instanceDescription = fillTemplateFromData(
         description,
         context.data.header,
         context.data.records[i]
       );
 
-      const { metaCid, imageCid } = await generateMetadata(
+      const { metaCid, imageCid, videoCid } = await generateMetadata(
         context.pinataClient,
         name,
         instanceDescription,
         imageFile,
+        videoFile
       );
 
       imageCidColumn.records[i] = imageCid;
+      videoCidColumn.records[i] = videoCid;
       metaCidColumn.records[i] = metaCid;
       isUpdated = true;
     }
   }
   if (isUpdated) {
-    context.data.setColumns([imageCidColumn, metaCidColumn]);
+    context.data.setColumns([imageCidColumn, metaCidColumn, videoCidColumn]);
     if (!dryRun) context.data.checkpoint();
   }
 };
@@ -418,22 +444,39 @@ const verifyWorkflow = async (wfConfig) => {
   // check image files
   const instanceMetadata = wfConfig?.instance?.metadata;
   if (!isEmptyObject(instanceMetadata)) {
-    const { imageFolder, fileNameTemplate } = instanceMetadata;
+    const { imageFolder, imageFileNameTemplate, videoFolder, videoFileNameTemplate } = instanceMetadata;
 
     for (let i = startRecordNo; i < endRecordNo; i++) {
       if (!context.data.records[i]) continue;
 
-      const imageFileName = formatFileName(
-        fileNameTemplate,
-        i + 2,
-        { header: context.data.header, records: context.data.records[i]},
-      );
-      const imageFile = path.join(imageFolder, imageFileName);
-
-      if (!fs.existsSync(imageFile)) {
-        throw new WorkflowError(
-          `imageFile: ${imageFile} does not exist to be minted for row: ${i + 2}`
+      if (imageFileNameTemplate) {
+        const imageFileName = formatFileName(
+          imageFileNameTemplate,
+          i + 2,
+          { header: context.data.header, records: context.data.records[i] },
         );
+        const imageFile = path.join(imageFolder, imageFileName);
+
+        if (!fs.existsSync(imageFile)) {
+          throw new WorkflowError(
+            `imageFile: ${imageFile} does not exist to be minted for row: ${i + 2}`
+          );
+        }
+      }
+
+      if (videoFileNameTemplate) {
+        const videoFileName = formatFileName(
+          videoFileNameTemplate,
+          i + 2,
+          { header: context.data.header, records: context.data.records[i]},
+        );
+        const videoFile = path.join(videoFolder, videoFileName);
+
+        if (!fs.existsSync(videoFile)) {
+          throw new WorkflowError(
+            `videoFile: ${videoFile} does not exist to be minted for row: ${i + 2}`
+          );
+        }
       }
     }
   }
