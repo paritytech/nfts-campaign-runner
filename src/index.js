@@ -2,6 +2,7 @@
 
 const { Command } = require('commander');
 const { runWorkflow } = require('./workflow/workflow');
+const { errorMessage, finalMessage } = require('./utils/styles');
 const { WorkflowError } = require('./Errors');
 const program = new Command();
 
@@ -12,7 +13,7 @@ program
   .option('--dry-run', 'Enable dry-run')
   .action(async (workflowConfig, options) => {
     await runWorkflow(workflowConfig, options.dryRun ?? false);
-    console.log('\ndone!');
+    console.log(finalMessage('\ndone!'));
   });
 
 program
@@ -20,7 +21,7 @@ program
   .then(() => process.exit(0))
   .catch((err) => {
     if (err instanceof WorkflowError) {
-      console.error(err?.message);
+      console.error(errorMessage(err?.message));
     } else {
       console.error(err);
     }

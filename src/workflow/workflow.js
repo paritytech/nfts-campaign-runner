@@ -2,6 +2,7 @@ const inquirer = require('inquirer');
 const fs = require('fs');
 const path = require('path');
 const BN = require('bn.js');
+
 const {
   generateAndSetClassMetadata,
   generateMetadata,
@@ -17,6 +18,7 @@ const { parseConfig } = require('./wfConfig');
 const { WorkflowError } = require('../Errors');
 const { fillTemplateFromData } = require('../utils/csv');
 const { isNumber, isEmptyObject } = require('../utils');
+const { importantMessage, stepTitle, systemMessage } = require('../utils/styles');
 
 const createClass = async (wfConfig) => {
   // 1- create class
@@ -41,7 +43,7 @@ const createClass = async (wfConfig) => {
       ])) || { appendToClass: false };
       if (!answer?.appendToClass) {
         throw new WorkflowError(
-          'Please set a different class name in your workflow.json settings.'
+          'Please set a different class id in your workflow.json settings.'
         );
       } else {
         context.class.id = cfgClassId;
@@ -57,6 +59,8 @@ const createClass = async (wfConfig) => {
     }
     // set the class checkpoint
     if (!dryRun) context.class.checkpoint();
+  } else {
+    console.log(systemMessage('Class information loaded from the checkpoint file'));
   }
 };
 
@@ -99,6 +103,8 @@ const setClassMetadata = async (wfConfig) => {
       // update class checkpoint
       if (!dryRun) context.class.checkpoint();
     }
+  } else {
+    console.log(systemMessage('Re-using class metadata from the checkpoint'));
   }
 };
 
@@ -135,6 +141,7 @@ const generateGiftSecrets = async (wfConfig) => {
     context.data.setColumns([secretColumn, addressColumn]);
     if (!dryRun) context.data.checkpoint();
   }
+  console.log('Secrets generated');
 };
 
 const mintInstancesInBatch = async (wfConfig) => {
@@ -165,6 +172,16 @@ const mintInstancesInBatch = async (wfConfig) => {
   // load last minted batch from checkpoint
   let batchSize = parseInt(wfConfig?.instance?.batchSize) || 100;
   let lastBatch = context.batch.lastMintBatch;
+
+  if (lastBatch) {
+    console.log(systemMessage('Checkpoint data spotted'));
+
+    if (startRecordNo + lastBatch * batchSize < endRecordNo) {
+      console.log(systemMessage(`Continuing from batch #${lastBatch}\n\n`));
+    } else {
+      console.log(importantMessage('Nothing left to mint'));
+    }
+  }
 
   let ownerAddresses = addressColumn.records;
   while (startRecordNo + lastBatch * batchSize < endRecordNo) {
@@ -236,7 +253,8 @@ const pinAndSetImageCid = async (wfConfig) => {
     columnTitles.metaCid,
     columnTitles.videoCid,
   ]);
-  let isUpdated = false;
+  let itemsGenerated = 0;
+  let totalItems = 0;
   for (let i = 0; i < context.data.records.length; i++) {
     if (i >= imageCidColumn.records.length) {
       imageCidColumn.records.push('');
@@ -248,7 +266,13 @@ const pinAndSetImageCid = async (wfConfig) => {
       metaCidColumn.records.push('');
     }
 
-    if (i >= startRecordNo && i < endRecordNo && !metaCidColumn.records[i]) {
+    if (i >= startRecordNo && i < endRecordNo) {
+      ++totalItems;
+      if (metaCidColumn.records[i]) {
+        console.log(`metadata for the row #${i} is already uploaded, skipping`);
+        continue;
+      }
+
       let imageFile;
       if (imageFileNameTemplate) {
         const imageFileName = formatFileName(
@@ -287,12 +311,15 @@ const pinAndSetImageCid = async (wfConfig) => {
       imageCidColumn.records[i] = imageCid;
       videoCidColumn.records[i] = videoCid;
       metaCidColumn.records[i] = metaCid;
-      isUpdated = true;
+      ++itemsGenerated;
     }
   }
-  if (isUpdated) {
+  if (itemsGenerated) {
     context.data.setColumns([imageCidColumn, metaCidColumn, videoCidColumn]);
     if (!dryRun) context.data.checkpoint();
+    console.log(`${itemsGenerated} metadata(s) uploaded`);
+  } else if (!totalItems) {
+    console.log(importantMessage('No metadata was uploaded'));
   }
 };
 
@@ -300,7 +327,7 @@ const setInstanceMetadata = async (wfConfig) => {
   // 6- set metadata for instances
   const instanceMetadata = wfConfig?.instance?.metadata;
   if (isEmptyObject(instanceMetadata)){
-    console.log('Skipped! No instance metadata is configured for the workflow');
+    console.log(systemMessage('Skipped! No instance metadata is configured for the workflow'));
     return;
   }
 
@@ -341,6 +368,16 @@ const setInstanceMetadata = async (wfConfig) => {
   // set the metadata for instances in batch
   let batchSize = parseInt(wfConfig?.instance?.batchSize) || 100;
   let lastBatch = context.batch.lastMetadataBatch || 0;
+
+  if (lastBatch) {
+    console.log(systemMessage('Checkpoint data spotted'));
+
+    if (startRecordNo + lastBatch * batchSize < endRecordNo) {
+      console.log(systemMessage(`Continuing from batch #${lastBatch}\n\n`));
+    } else {
+      console.log(importantMessage('Nothing left to mint'));
+    }
+  }
 
   let instanceMetadatas = [];
   for (let i = 0; i <= context.data.records.length; i++) {
@@ -401,6 +438,16 @@ const sendInitialFunds = async (wfConfig) => {
   // load last balanceTx batch from checkpoint
   let batchSize = parseInt(wfConfig?.instance?.batchSize) || 100;
   let lastBatch = context.batch.lastBalanceTxBatch;
+
+  if (lastBatch) {
+    console.log(systemMessage('Checkpoint data spotted'));
+
+    if (startRecordNo + lastBatch * batchSize < endRecordNo) {
+      console.log(systemMessage(`Continuing from batch #${lastBatch}\n\n`));
+    } else {
+      console.log(importantMessage('All the addresses were funded successfully'));
+    }
+  }
 
   let ownerAddresses = addressColumn.records;
   while (startRecordNo + lastBatch * batchSize < endRecordNo) {
@@ -492,19 +539,18 @@ const enableDryRun = async () => {
   }
 
   context.dryRun = true;
-  console.log('\ndry-run mode is on');
 };
 
 const runWorkflow = async (configFile = './src/workflow.json', dryRunMode) => {
-  console.log('loading the workflow config ...');
+  if (dryRunMode) console.log(importantMessage('\ndry-run mode is on'));
+
+  console.log('> loading the workflow config ...');
   let { error, config } = parseConfig(configFile);
 
   if (error) {
-    throw new WorkflowError(
-      `there was an error while loading the workflow config: ${error}`
-    );
+    throw new WorkflowError(error);
   }
-  console.log('setting the context for the workflow ...');
+  console.log('> setting the context for the workflow ...');
 
   await checkPreviousCheckpoints();
   await loadContext(config);
@@ -518,43 +564,43 @@ const runWorkflow = async (configFile = './src/workflow.json', dryRunMode) => {
     // await enableDryRun();
 
     // temporary code
-    console.log('\ndry-run check successfully finished');
+    console.log(importantMessage('\ndry-run check successfully finished'));
     return;
   }
 
   // 1- create class
-  console.info('\n\nCreating the uniques class ...');
+  console.info(stepTitle`\n\nCreating the uniques class ...`);
   await createClass(config);
 
   // 2- set classMetadata
-  console.info('\n\nSetting class metadata ...');
+  console.info(stepTitle`\n\nSetting class metadata ...`);
   await setClassMetadata(config);
 
   // 3- generate secrets
-  console.info('\n\nGenerating gift secrets ...');
+  console.info(stepTitle`\n\nGenerating gift secrets ...`);
   await generateGiftSecrets(config);
 
   //4- mint instances in batch
-  console.info('\n\nMinting nft instances ...');
+  console.info(stepTitle`\n\nMinting nft instances ...`);
   await mintInstancesInBatch(config);
 
   //5- pin images and generate metadata
-  console.info('\n\nUploading and pinning the nfts on IPFS ...');
+  console.info(stepTitle`\n\nUploading and pinning the NFTs on IPFS ...`);
   await pinAndSetImageCid(config);
 
   //6- set metadata for instances
-  console.info('\n\nSetting the instance metadata on chain ...');
+  console.info(stepTitle`\n\nSetting the instance metadata on chain ...`);
   await setInstanceMetadata(config);
 
   //7-fund gift accounts with the initialFund amount.
-  console.info('\n\nSeeding the accounts with initial funds ...');
+  console.info(stepTitle`\n\nSeeding the accounts with initial funds ...`);
   await sendInitialFunds(config);
 
   if (!dryRunMode) {
     // move the final data file to the output path, cleanup the checkpoint files.
     let outFilename = config?.instance?.data?.outputCsvFile;
     context.data.writeFinalResult(outFilename);
-    console.info(`\n\nThe final datafile is copied at \n ${outFilename}`);
+    console.info(importantMessage(`\n\nThe final datafile is copied at \n ${outFilename}`));
   }
 
   // cleanup the workspace, remove checkpoint files

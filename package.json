@@ -16,6 +16,7 @@
     "@polkadot/util-crypto": "^8.3.3",
     "bn.js": "^5.2.0",
     "commander": "^9.0.0",
+    "chalk": "^4.1.2",
     "csv": "^6.0.5",
     "inquirer": "^8.2.0",
     "lodash.get": "^4.4.2"

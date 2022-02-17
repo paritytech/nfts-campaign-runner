@@ -1,3 +1,5 @@
+const { importantMessage } = require('../utils/styles');
+
 const decodeResult = (api, result) => {
   let { dispatchInfo, dispatchError, events = [] } = result;
   const success = !dispatchError;
@@ -37,7 +39,7 @@ exports.signAndSendTx = async (api, tx, signingPair, finalize = true, dryRun = f
           const check = await tx.dryRun(signingPair);
           const error = check.isError ? check.asError : null;
           if (check.isOk) {
-            console.log(`tx simulation succeeded`);
+            console.log(importantMessage('tx simulation succeeded'));
           }
           cb({ success: check.isOk, events: [], error });
           return;

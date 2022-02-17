@@ -15,8 +15,6 @@ let mintClassInstances = async (network, classId, startInstanceId, owners, dryRu
     ? api.tx.proxy.proxy(proxiedAddress, 'Assets', txBatch)
     : txBatch;
   await signAndSendTx(api, call, signingPair, true, dryRun);
-
-  if (!dryRun) console.log(call.toHuman());
 };
 
 module.exports = { mintClassInstances };

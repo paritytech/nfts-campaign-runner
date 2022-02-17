@@ -9,6 +9,7 @@ const {
   getColumnIndex,
   getColumns,
 } = require('../utils/csv');
+const { systemMessage } = require('../utils/styles');
 const { WorkflowError } = require('../Errors');
 
 const inqAsk = inquirer.createPromptModule();
@@ -253,6 +254,7 @@ const checkPreviousCheckpoints = async () => {
   if (answer?.continueFromCheckpoint) return;
 
   removeCheckpoints();
+  console.log(systemMessage('Previous checkpoints removed'));
 }
 
 module.exports = { columnTitles, checkPreviousCheckpoints, loadContext, getContext };
