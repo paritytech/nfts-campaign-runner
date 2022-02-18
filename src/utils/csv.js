@@ -17,9 +17,19 @@ const readCsvSync = (file, hasHeader = true) => {
 };
 
 const normalizeCsvFields = (record) => {
-  record = record.map((field) =>
-    typeof field === 'string' && field.includes(',') ? `"${field}"` : field
-  );
+  record = record.map((field) => {
+    if (
+      typeof field === 'string' &&
+      (field.includes(',') || field.includes('\n') || field.includes(`"`))
+    ) {
+      // scape any quotations inside the fields with double quotation
+      field = field.replaceAll(`"`, `""`);
+
+      // wrap all strings with separator, new line and quotation in a quotation
+      field = `"${field}"`;
+    }
+    return field;
+  });
   return record;
 };
 const writeCsvSync = (file, headers, records) => {
