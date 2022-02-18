@@ -9,9 +9,6 @@ const readCsvSync = (file, hasHeader = true) => {
     skip_empty_lines: true,
   });
 
-  records = records.map((field) =>
-    field.includes(',') ? `"${field}"` : field
-  );
   if (hasHeader && records.length > 0) {
     header = records[0];
     records = records.slice(1);
@@ -19,7 +16,15 @@ const readCsvSync = (file, hasHeader = true) => {
   return { header, records };
 };
 
+const normalizeCsvFields = (record) => {
+  record = record.map((field) =>
+    typeof field === 'string' && field.includes(',') ? `"${field}"` : field
+  );
+  return record;
+};
 const writeCsvSync = (file, headers, records) => {
+  records = records.map((record) => normalizeCsvFields(record));
+
   let data = [headers, ...records];
   let csvRecords = data.join('\n');
   fs.writeFileSync(file, csvRecords);

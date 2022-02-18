@@ -11,14 +11,23 @@ const {
 const { generateSecret } = require('./giftSecrets');
 const { mintClassInstances } = require('./mint');
 const { transferFunds } = require('./balanceTransfer');
-const { columnTitles, checkPreviousCheckpoints, loadContext, getContext } = require('./context');
+const {
+  columnTitles,
+  checkPreviousCheckpoints,
+  loadContext,
+  getContext,
+} = require('./context');
 const { signAndSendTx } = require('../chain/txHandler');
 const inqAsk = inquirer.createPromptModule();
 const { parseConfig } = require('./wfConfig');
 const { WorkflowError } = require('../Errors');
 const { fillTemplateFromData } = require('../utils/csv');
 const { isNumber, isEmptyObject } = require('../utils');
-const { importantMessage, stepTitle, systemMessage } = require('../utils/styles');
+const {
+  importantMessage,
+  stepTitle,
+  systemMessage,
+} = require('../utils/styles');
 
 const createClass = async (wfConfig) => {
   // 1- create class
@@ -27,7 +36,10 @@ const createClass = async (wfConfig) => {
   const { dryRun } = context;
 
   // if a valid class is not already created or does not exist, create the class
-  if (context.class.id === undefined || wfConfig.class?.id !== context.class.id) {
+  if (
+    context.class.id === undefined ||
+    wfConfig.class?.id !== context.class.id
+  ) {
     // check the specified class does not exist
     let cfgClassId = wfConfig.class.id;
     let uniquesClass = await api.query.uniques.class(cfgClassId);
@@ -60,7 +72,9 @@ const createClass = async (wfConfig) => {
     // set the class checkpoint
     if (!dryRun) context.class.checkpoint();
   } else {
-    console.log(systemMessage('Class information loaded from the checkpoint file'));
+    console.log(
+      systemMessage('Class information loaded from the checkpoint file')
+    );
   }
 };
 
@@ -228,7 +242,7 @@ const formatFileName = (fileNameTemplate, rowNumber, { header, records }) => {
   }
 
   return fillTemplateFromData(fileNameTemplate, header, records);
-}
+};
 
 const pinAndSetImageCid = async (wfConfig) => {
   // 5- pin images and generate metadata
@@ -248,11 +262,12 @@ const pinAndSetImageCid = async (wfConfig) => {
     videoFileNameTemplate,
   } = instanceMetadata;
 
-  const [imageCidColumn, metaCidColumn, videoCidColumn] = context.data.getColumns([
-    columnTitles.imageCid,
-    columnTitles.metaCid,
-    columnTitles.videoCid,
-  ]);
+  const [imageCidColumn, metaCidColumn, videoCidColumn] =
+    context.data.getColumns([
+      columnTitles.imageCid,
+      columnTitles.metaCid,
+      columnTitles.videoCid,
+    ]);
   let itemsGenerated = 0;
   let totalItems = 0;
   for (let i = 0; i < context.data.records.length; i++) {
@@ -275,23 +290,28 @@ const pinAndSetImageCid = async (wfConfig) => {
 
       let imageFile;
       if (imageFileNameTemplate) {
-        const imageFileName = formatFileName(
-          imageFileNameTemplate,
-          i + 2,
-          { header: context.data.header, records: context.data.records[i] },
-        );
+        const imageFileName = formatFileName(imageFileNameTemplate, i + 2, {
+          header: context.data.header,
+          records: context.data.records[i],
+        });
         imageFile = path.join(imageFolder, imageFileName);
       }
 
       let videoFile;
       if (videoFileNameTemplate) {
-        const videoFileName = formatFileName(
-          videoFileNameTemplate,
-          i + 2,
-          { header: context.data.header, records: context.data.records[i]},
-        );
+        const videoFileName = formatFileName(videoFileNameTemplate, i + 2, {
+          header: context.data.header,
+          records: context.data.records[i],
+        });
         videoFile = path.join(videoFolder, videoFileName);
       }
+
+      // fill template name to build the name string
+      const instanceName = fillTemplateFromData(
+        name,
+        context.data.header,
+        context.data.records[i]
+      );
 
       // fill template description to build the description string
       const instanceDescription = fillTemplateFromData(
@@ -302,7 +322,7 @@ const pinAndSetImageCid = async (wfConfig) => {
 
       const { metaCid, imageCid, videoCid } = await generateMetadata(
         context.pinataClient,
-        name,
+        instanceName,
         instanceDescription,
         imageFile,
         videoFile
@@ -326,8 +346,12 @@ const pinAndSetImageCid = async (wfConfig) => {
 const setInstanceMetadata = async (wfConfig) => {
   // 6- set metadata for instances
   const instanceMetadata = wfConfig?.instance?.metadata;
-  if (isEmptyObject(instanceMetadata)){
-    console.log(systemMessage('Skipped! No instance metadata is configured for the workflow'));
+  if (isEmptyObject(instanceMetadata)) {
+    console.log(
+      systemMessage(
+        'Skipped! No instance metadata is configured for the workflow'
+      )
+    );
     return;
   }
 
@@ -396,7 +420,7 @@ const setInstanceMetadata = async (wfConfig) => {
       endRecordNo
     );
 
-     await setMetadataInBatch(
+    await setMetadataInBatch(
       context.network,
       context.class.id,
       instanceMetadatas.slice(batchStartRecordNo, batchEndRecordNo),
@@ -445,7 +469,9 @@ const sendInitialFunds = async (wfConfig) => {
     if (startRecordNo + lastBatch * batchSize < endRecordNo) {
       console.log(systemMessage(`Continuing from batch #${lastBatch}\n\n`));
     } else {
-      console.log(importantMessage('All the addresses were funded successfully'));
+      console.log(
+        importantMessage('All the addresses were funded successfully')
+      );
     }
   }
 
@@ -491,37 +517,44 @@ const verifyWorkflow = async (wfConfig) => {
   // check image files
   const instanceMetadata = wfConfig?.instance?.metadata;
   if (!isEmptyObject(instanceMetadata)) {
-    const { imageFolder, imageFileNameTemplate, videoFolder, videoFileNameTemplate } = instanceMetadata;
+    const {
+      imageFolder,
+      imageFileNameTemplate,
+      videoFolder,
+      videoFileNameTemplate,
+    } = instanceMetadata;
 
     for (let i = startRecordNo; i < endRecordNo; i++) {
       if (!context.data.records[i]) continue;
 
       if (imageFileNameTemplate) {
-        const imageFileName = formatFileName(
-          imageFileNameTemplate,
-          i + 2,
-          { header: context.data.header, records: context.data.records[i] },
-        );
+        const imageFileName = formatFileName(imageFileNameTemplate, i + 2, {
+          header: context.data.header,
+          records: context.data.records[i],
+        });
         const imageFile = path.join(imageFolder, imageFileName);
 
         if (!fs.existsSync(imageFile)) {
           throw new WorkflowError(
-            `imageFile: ${imageFile} does not exist to be minted for row: ${i + 2}`
+            `imageFile: ${imageFile} does not exist to be minted for row: ${
+              i + 2
+            }`
           );
         }
       }
 
       if (videoFileNameTemplate) {
-        const videoFileName = formatFileName(
-          videoFileNameTemplate,
-          i + 2,
-          { header: context.data.header, records: context.data.records[i]},
-        );
+        const videoFileName = formatFileName(videoFileNameTemplate, i + 2, {
+          header: context.data.header,
+          records: context.data.records[i],
+        });
         const videoFile = path.join(videoFolder, videoFileName);
 
         if (!fs.existsSync(videoFile)) {
           throw new WorkflowError(
-            `videoFile: ${videoFile} does not exist to be minted for row: ${i + 2}`
+            `videoFile: ${videoFile} does not exist to be minted for row: ${
+              i + 2
+            }`
           );
         }
       }
@@ -600,7 +633,9 @@ const runWorkflow = async (configFile = './src/workflow.json', dryRunMode) => {
     // move the final data file to the output path, cleanup the checkpoint files.
     let outFilename = config?.instance?.data?.outputCsvFile;
     context.data.writeFinalResult(outFilename);
-    console.info(importantMessage(`\n\nThe final datafile is copied at \n ${outFilename}`));
+    console.info(
+      importantMessage(`\n\nThe final datafile is copied at \n ${outFilename}`)
+    );
   }
 
   // cleanup the workspace, remove checkpoint files
