@@ -249,7 +249,7 @@ const pinAndSetImageCid = async (wfConfig) => {
   let context = getContext();
   const { startRecordNo, endRecordNo } = context.data;
   const { dryRun } = context;
-
+  const rowNumber = (zerobasedIdx) => zerobasedIdx + 2;
   const instanceMetadata = wfConfig?.instance?.metadata;
   if (isEmptyObject(instanceMetadata)) return;
 
@@ -290,19 +290,27 @@ const pinAndSetImageCid = async (wfConfig) => {
 
       let imageFile;
       if (imageFileNameTemplate) {
-        const imageFileName = formatFileName(imageFileNameTemplate, i + 2, {
-          header: context.data.header,
-          records: context.data.records[i],
-        });
+        const imageFileName = formatFileName(
+          imageFileNameTemplate,
+          rowNumber(i),
+          {
+            header: context.data.header,
+            records: context.data.records[i],
+          }
+        );
         imageFile = path.join(imageFolder, imageFileName);
       }
 
       let videoFile;
       if (videoFileNameTemplate) {
-        const videoFileName = formatFileName(videoFileNameTemplate, i + 2, {
-          header: context.data.header,
-          records: context.data.records[i],
-        });
+        const videoFileName = formatFileName(
+          videoFileNameTemplate,
+          rowNumber(i),
+          {
+            header: context.data.header,
+            records: context.data.records[i],
+          }
+        );
         videoFile = path.join(videoFolder, videoFileName);
       }
 
@@ -320,12 +328,14 @@ const pinAndSetImageCid = async (wfConfig) => {
         context.data.records[i]
       );
 
+      let metadatName = `row-${rowNumber(i)}`;
       const { metaCid, imageCid, videoCid } = await generateMetadata(
         context.pinataClient,
         instanceName,
         instanceDescription,
         imageFile,
-        videoFile
+        videoFile,
+        metadatName
       );
 
       imageCidColumn.records[i] = imageCid;

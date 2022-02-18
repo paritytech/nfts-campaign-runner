@@ -8,7 +8,8 @@ const generateMetadata = async (
   name,
   description,
   imageFile,
-  videoFile
+  videoFile,
+  metaName
 ) => {
   // validate image
   let imagePath;
@@ -43,12 +44,12 @@ const generateMetadata = async (
   }
 
   // pin image
-  let metaPath, metaName, imageCid, videoCid;
+  let metaPath, imageCid, videoCid;
 
   if (imageFile) {
     const { dir, name: fname } = path.parse(imagePath);
-    metaPath = path.join(dir, `${fname}.meta`);
-    metaName = fname;
+    metaName = metaName ?? fname;
+    metaPath = path.join(dir, `${metaName}.meta`);
 
     imageCid = await pinataClient.pinFile(imagePath, `${fname}.image`, true);
     if (!imageCid) {
@@ -58,8 +59,8 @@ const generateMetadata = async (
 
   if (videoFile) {
     const { dir, name: fname } = path.parse(videoPath);
-    metaPath = metaPath ?? path.join(dir, `${fname}.meta`);
     metaName = metaName ?? fname;
+    metaPath = metaPath ?? path.join(dir, `${metaName}.meta`);
 
     videoCid = await pinataClient.pinFile(videoPath, `${fname}.video`, true);
     if (!videoCid) {
