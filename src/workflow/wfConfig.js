@@ -17,7 +17,10 @@ const parseConfig = (cfile) => {
     validateFileExists(configFile, 'workflow config');
 
     configJson = require(configFile);
-    validate(configJson, `No workflow configuration was found in configuration file: ${configFile}`);
+    validate(
+      configJson,
+      `No workflow configuration was found in configuration file: ${configFile}`
+    );
 
     // network
     validateSection(configJson, 'network', configFile);
@@ -33,10 +36,16 @@ const parseConfig = (cfile) => {
     validateSection(configJson, 'class', configFile);
     validateElement(configJson, 'class.id', configFile);
     if (configJson.class.metadata?.imageFile) {
-      validateFileExists(path.resolve(configJson.class.metadata.imageFile), 'class.metadata.imageFile');
+      validateFileExists(
+        path.resolve(configJson.class.metadata.imageFile),
+        'class.metadata.imageFile'
+      );
     }
     if (configJson.class.metadata?.videoFile) {
-      validateFileExists(path.resolve(configJson.class.metadata.videoFile), 'class.metadata.videoFile');
+      validateFileExists(
+        path.resolve(configJson.class.metadata.videoFile),
+        'class.metadata.videoFile'
+      );
     }
 
     // instance
@@ -56,9 +65,15 @@ const parseConfig = (cfile) => {
     let filename = path.basename(configJson.instance.data.csvFile, ext);
     filename += ext ? `.final${ext}` : `.final`;
     let outFilename = path.join(outDir, filename);
+    let metaFolderName = 'metadata';
+    let metaFolderPath = path.join(outDir, metaFolderName);
+    configJson.metadataFolder = path.resolve(metaFolderPath);
     configJson.instance.data.outputCsvFile = path.resolve(outFilename);
 
-    validateFileExists(configJson.instance.data.csvFile, 'instance.data.csvFile');
+    validateFileExists(
+      configJson.instance.data.csvFile,
+      'instance.data.csvFile'
+    );
     validateFileAccess(outDir, 'write');
 
     // instance.metadata
@@ -70,9 +85,13 @@ const parseConfig = (cfile) => {
         const imageFolder = parts.join('/');
 
         configJson.instance.metadata.imageFolder = path.resolve(imageFolder);
-        configJson.instance.metadata.imageFileNameTemplate = imageFileNameTemplate;
+        configJson.instance.metadata.imageFileNameTemplate =
+          imageFileNameTemplate;
 
-        validateFileExists(configJson.instance.metadata.imageFolder, 'instance.metadata.imageFile');
+        validateFileExists(
+          configJson.instance.metadata.imageFolder,
+          'instance.metadata.imageFile'
+        );
       }
 
       if (instanceMetadata.videoFile) {
@@ -81,9 +100,13 @@ const parseConfig = (cfile) => {
         const videoFolder = parts.join('/');
 
         configJson.instance.metadata.videoFolder = path.resolve(videoFolder);
-        configJson.instance.metadata.videoFileNameTemplate = videoFileNameTemplate;
+        configJson.instance.metadata.videoFileNameTemplate =
+          videoFileNameTemplate;
 
-        validateFileExists(configJson.instance.metadata.videoFolder, 'instance.metadata.videoFile');
+        validateFileExists(
+          configJson.instance.metadata.videoFolder,
+          'instance.metadata.videoFile'
+        );
       }
 
       validateElement(configJson, 'instance.metadata.name', configFile);

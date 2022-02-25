@@ -9,8 +9,23 @@ const generateMetadata = async (
   description,
   imageFile,
   videoFile,
-  metaName
+  metaPath
 ) => {
+  let metaName;
+  // reseolve metaPath
+  if (metaPath) {
+    const { dir, base: metaName } = path.parse(metaPath);
+    // make directory if the meta directory does not exist
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    if (!metaName) {
+      throw new Error(`${metaPath} is not a valid file path`);
+    }
+  } else {
+    throw new Error(`A path is required to save the metadata file.`);
+  }
+
   // validate image
   let imagePath;
   if (imageFile) {
@@ -44,13 +59,10 @@ const generateMetadata = async (
   }
 
   // pin image
-  let metaPath, imageCid, videoCid;
+  let imageCid, videoCid;
 
   if (imageFile) {
-    const { dir, name: fname } = path.parse(imagePath);
-    metaName = metaName ?? fname;
-    metaPath = path.join(dir, `${metaName}.meta`);
-
+    const { name: fname } = path.parse(imagePath);
     imageCid = await pinataClient.pinFile(imagePath, `${fname}.image`, true);
     if (!imageCid) {
       throw new WorkflowError(`failed to pin image.`);
@@ -58,10 +70,7 @@ const generateMetadata = async (
   }
 
   if (videoFile) {
-    const { dir, name: fname } = path.parse(videoPath);
-    metaName = metaName ?? fname;
-    metaPath = metaPath ?? path.join(dir, `${metaName}.meta`);
-
+    const { name: fname } = path.parse(videoPath);
     videoCid = await pinataClient.pinFile(videoPath, `${fname}.video`, true);
     if (!videoCid) {
       throw new WorkflowError(`failed to pin video.`);
@@ -85,14 +94,14 @@ const generateMetadata = async (
 
   // pin metadata
   let metaCid;
-  if (metaName) {
-    // Do NOT use cache for metadata, metadata per instance is unique.
-    metaCid = await pinataClient.pinFile(metaPath, `${metaName}.meta`);
 
-    if (!metaCid) {
-      throw new WorkflowError(`failed to pin metadata`);
-    }
+  // Do NOT use cache for metadata, metadata per instance is unique.
+  metaCid = await pinataClient.pinFile(metaPath, `${metaName}`);
+
+  if (!metaCid) {
+    throw new WorkflowError(`failed to pin metadata`);
   }
+
   return { metaCid, imageCid, videoCid };
 };
 
@@ -132,7 +141,8 @@ const generateAndSetClassMetadata = async (
   connection,
   pinataClient,
   classId,
-  metadata
+  metadata,
+  outputFile
 ) => {
   let { name, description, imageFile, videoFile } = metadata;
   const { metaCid } = await generateMetadata(
@@ -140,7 +150,8 @@ const generateAndSetClassMetadata = async (
     name,
     description,
     imageFile,
-    videoFile
+    videoFile,
+    outputFile
   );
 
   await setClassMetadata(connection, classId, metaCid);

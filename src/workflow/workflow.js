@@ -108,11 +108,14 @@ const setClassMetadata = async (wfConfig) => {
         );
       }
     } else {
+      let metadataFolder = wfConfig.metadataFolder;
+      let metadataFile = path.join(metadataFolder, 'class.meta');
       context.class.metaCid = await generateAndSetClassMetadata(
         context.network,
         context.pinataClient,
         context.class.id,
-        metadata
+        metadata,
+        metadataFile
       );
       // update class checkpoint
       if (!dryRun) context.class.checkpoint();
@@ -252,7 +255,6 @@ const pinAndSetImageCid = async (wfConfig) => {
   const rowNumber = (zerobasedIdx) => zerobasedIdx + 2;
   const instanceMetadata = wfConfig?.instance?.metadata;
   if (isEmptyObject(instanceMetadata)) return;
-
   const {
     name,
     description,
@@ -328,14 +330,16 @@ const pinAndSetImageCid = async (wfConfig) => {
         context.data.records[i]
       );
 
-      let metadatName = `row-${rowNumber(i)}`;
+      let metadataName = `row-${rowNumber(i)}.mata`;
+      let metadataFolder = wfConfig.metadataFolder;
+      let metaPath = path.join(metadataFolder, metadataName);
       const { metaCid, imageCid, videoCid } = await generateMetadata(
         context.pinataClient,
         instanceName,
         instanceDescription,
         imageFile,
         videoFile,
-        metadatName
+        metaPath
       );
 
       imageCidColumn.records[i] = imageCid;
