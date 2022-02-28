@@ -330,7 +330,7 @@ const pinAndSetImageCid = async (wfConfig) => {
         context.data.records[i]
       );
 
-      let metadataName = `row-${rowNumber(i)}.mata`;
+      let metadataName = `row-${rowNumber(i)}.meta`;
       let metadataFolder = wfConfig.metadataFolder;
       let metaPath = path.join(metadataFolder, metadataName);
       const { metaCid, imageCid, videoCid } = await generateMetadata(
