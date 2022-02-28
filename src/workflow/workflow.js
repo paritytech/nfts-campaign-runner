@@ -108,11 +108,14 @@ const setClassMetadata = async (wfConfig) => {
         );
       }
     } else {
+      let metadataFolder = wfConfig.metadataFolder;
+      let metadataFile = path.join(metadataFolder, 'class.meta');
       context.class.metaCid = await generateAndSetClassMetadata(
         context.network,
         context.pinataClient,
         context.class.id,
-        metadata
+        metadata,
+        metadataFile
       );
       // update class checkpoint
       if (!dryRun) context.class.checkpoint();
@@ -249,10 +252,9 @@ const pinAndSetImageCid = async (wfConfig) => {
   let context = getContext();
   const { startRecordNo, endRecordNo } = context.data;
   const { dryRun } = context;
-
+  const rowNumber = (zerobasedIdx) => zerobasedIdx + 2;
   const instanceMetadata = wfConfig?.instance?.metadata;
   if (isEmptyObject(instanceMetadata)) return;
-
   const {
     name,
     description,
@@ -290,19 +292,27 @@ const pinAndSetImageCid = async (wfConfig) => {
 
       let imageFile;
       if (imageFileNameTemplate) {
-        const imageFileName = formatFileName(imageFileNameTemplate, i + 2, {
-          header: context.data.header,
-          records: context.data.records[i],
-        });
+        const imageFileName = formatFileName(
+          imageFileNameTemplate,
+          rowNumber(i),
+          {
+            header: context.data.header,
+            records: context.data.records[i],
+          }
+        );
         imageFile = path.join(imageFolder, imageFileName);
       }
 
       let videoFile;
       if (videoFileNameTemplate) {
-        const videoFileName = formatFileName(videoFileNameTemplate, i + 2, {
-          header: context.data.header,
-          records: context.data.records[i],
-        });
+        const videoFileName = formatFileName(
+          videoFileNameTemplate,
+          rowNumber(i),
+          {
+            header: context.data.header,
+            records: context.data.records[i],
+          }
+        );
         videoFile = path.join(videoFolder, videoFileName);
       }
 
@@ -320,12 +330,16 @@ const pinAndSetImageCid = async (wfConfig) => {
         context.data.records[i]
       );
 
+      let metadataName = `row-${rowNumber(i)}.meta`;
+      let metadataFolder = wfConfig.metadataFolder;
+      let metaPath = path.join(metadataFolder, metadataName);
       const { metaCid, imageCid, videoCid } = await generateMetadata(
         context.pinataClient,
         instanceName,
         instanceDescription,
         imageFile,
-        videoFile
+        videoFile,
+        metaPath
       );
 
       imageCidColumn.records[i] = imageCid;
