@@ -107,5 +107,5 @@ dist
 .idea
 
 # Project files & folders
-data
+testflow
 .checkpoint
