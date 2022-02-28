@@ -12,7 +12,7 @@ const generateMetadata = async (
   metaPath
 ) => {
   let metaName;
-  // reseolve metaPath
+  // resolve metaPath
   if (metaPath) {
     const { dir, base: metaName } = path.parse(metaPath);
     // make directory if the meta directory does not exist
