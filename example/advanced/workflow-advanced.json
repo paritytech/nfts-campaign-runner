@@ -1,0 +1,34 @@
+{
+    "network": {
+      "provider": "wss://statemine-rpc.polkadot.io",
+      "accountSeed": "<account seed>",
+      "proxiedAddress": "<in case the account is a proxy the address of the proxied/primary account>"
+    },
+    "pinata": {
+      "apiKey": "<PinataApiKey>",
+      "secretApiKey": "<PinataSecretApiKey>"
+    },
+    "class": {
+      "id": "<classId that the NFT instances are being minted in>",
+      "metadata": {
+        "imageFile": "~/class-image.png",
+        "videoFile": "~/class-video.mp4",
+        "name": "An example NFT campiagn",
+        "description": "This is an example NFT campaign, with images and videos, and uses interpolation feature to include data from csv columns in description and name"
+      }
+    },
+    "instance": {
+      "data": {
+        "csvFile": "~/advanced.csv"
+      },
+      "metadata": {
+        "imageFile": "<<NFT #>>.png",
+        "videoFile": "<<NFT #>>.png",
+        "name": "VIP NFT for <<first name>>",
+        "description": "Thanks <<first name>> <<last name>> for being such an incredible member"
+      },
+      "batchSize": "100",
+      "initialFund": "<some initial fund to deposit to the gift account to cover the NFT transfer fees. Must be more than Existensial deposit of the network.>"
+    }
+    }
+  }

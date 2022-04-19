@@ -1,0 +1,26 @@
+{
+  "network": {
+    "provider": "wss://statemine-rpc.polkadot.io",
+    "accountSeed": "",
+    "proxiedAddress": ""
+  },
+  "pinata": {
+    "apiKey": "<pinata api id>",
+    "secretApiKey": "<pinata secrey key>"
+  },
+  "class": {
+    "id": "<specify the nft class Id>",
+    "metadata": {
+      "imageFile": "~/nft.png",
+      "name": "An example NFT campiagn",
+      "description": "This is an example NFT campaign"
+    }
+  },
+  "instance": {
+    "data": {
+      "csvFile": "~/simple.csv"
+    },
+    "batchSize": "100",
+    "initialFund": "<some initial fund to deposit to the gift account to cover the NFT transfer fees. Must be more than Existensial deposit of the network.>"
+  }
+}
