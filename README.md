@@ -68,10 +68,10 @@ Note:
 - The data file specified by `instance.data.csvFile` is a csv file, which the number of rows in the file specifies the maximum number of instances that can be minted. If specified, the combination of offset and count determines the actual number of instances that are going to be minted.
 - The offset specifies the first row number in the csv datafile that the instances will be minted from that row up to the specified count.
 - If the calculated row numbers fall outside of the number of rows in the csv file (e.x. `offset+count-1 > last_row_number_in_the_file`) the minting will stop after the last row number.
-- The `instance.metadata.imageFile` specifies the file path that contains the media file that is going to be minted. 
-Path example: `/Users/user/nfts/<<image name>>.png` where `<<image name>>` will be replaced with the value in the "image name" column according to the row number in the csv datafile. 
-Additionally, you can use this template: `/Users/user/nfts/<>.png` in which the '<>' will be replaced with the row number. 
-- The `instance.metadata.videoFile` specifies the file path that contains the video file that is going to be minted. Has the same naming format as `instance.metadata.imageFile`. 
+- The `instance.metadata.imageFile` specifies the file path that contains the media file that is going to be minted.
+  Path example: `/Users/user/nfts/<<image name>>.png` where `<<image name>>` will be replaced with the value in the "image name" column according to the row number in the csv datafile.
+  Additionally, you can use this template: `/Users/user/nfts/<>.png` in which the '<>' will be replaced with the row number.
+- The `instance.metadata.videoFile` specifies the file path that contains the video file that is going to be minted. Has the same naming format as `instance.metadata.imageFile`.
 
 ## Running a workflow
 
@@ -92,3 +92,10 @@ After the minted process is complete a final .csv data file which includes the g
 ## Checkpoints
 
 The workflow is checkpointed at each step, in case it is halted at any point during the process due to any failures, you can take it from where you left and continue it from the last successful checkpoint by running the cli again.
+
+# examples
+
+For sample worflows check the example folder.
+
+- The _simple_ folder includes a csv with no information and mints 10 NFTs with no customized metadata.
+- The advanced folder includes a csv with multiple columns and uses the data from csv columns to create customized NFTs, with customized metadata and different images and videos for each NFT.
