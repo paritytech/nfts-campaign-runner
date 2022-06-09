@@ -612,6 +612,7 @@ const runWorkflow = async (configFile = './src/workflow.json', dryRunMode) => {
 
     // temporary code
     console.log(importantMessage('\ndry-run check successfully finished'));
+    context.clean();
     return;
   }
 
