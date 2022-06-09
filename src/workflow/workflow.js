@@ -399,7 +399,7 @@ const setInstanceMetadata = async (wfConfig) => {
     !isNumber(instanceIdColumn?.records?.[endRecordNo - 1])
   ) {
     throw new WorkflowError(
-      'No instanceId checkpoint is recorded or the checkpoint is not in a correct state.'
+      'No instanceId is recorded or the checkpoint is not in a correct state.'
     );
   }
 
@@ -418,7 +418,13 @@ const setInstanceMetadata = async (wfConfig) => {
   }
 
   let instanceMetadatas = [];
-  for (let i = 0; i <= context.data.records.length; i++) {
+  // iterate the rows from startRecordNo to endRecordNo and collect recorded metadata info
+  for (let i = startRecordNo; i < endRecordNo; i++) {
+    if (!isNumber(instanceIdColumn.records?.[i])) {
+      throw new WorkflowError(
+        `No instanceId is recorded for row#: ${i} or the checkpoint is not in a correct state.`
+      );
+    }
     const metadata = {
       instanceId: instanceIdColumn.records[i],
       metaCid: metaCidColumn.records[i],
@@ -437,7 +443,10 @@ const setInstanceMetadata = async (wfConfig) => {
     await setMetadataInBatch(
       context.network,
       context.class.id,
-      instanceMetadatas.slice(batchStartRecordNo, batchEndRecordNo),
+      instanceMetadatas.slice(
+        batchStartRecordNo - startRecordNo,
+        batchEndRecordNo - startRecordNo
+      ),
       dryRun
     );
     lastBatch += 1;
@@ -657,6 +666,68 @@ const runWorkflow = async (configFile = './src/workflow.json', dryRunMode) => {
   context.clean();
 };
 
+const updateMetadata = async (
+  configFile = './src/workflow.json',
+  dryRunMode
+) => {
+  if (dryRunMode) console.log(importantMessage('\ndry-run mode is on'));
+
+  console.log('> loading the workflow config ...');
+  let { error, config } = parseConfig(configFile);
+
+  if (error) {
+    throw new WorkflowError(error);
+  }
+  console.log('> setting the context for the update metadata workflow ...');
+
+  await checkPreviousCheckpoints();
+  await loadContext(config);
+  let context = getContext();
+
+  // 0- run various checks
+  await verifyWorkflow(config);
+
+  if (dryRunMode) {
+    // TODO: uncomment once we find a true way to detect that method on rpc nodes
+    // await enableDryRun();
+
+    // temporary code
+    console.log(importantMessage('\ndry-run check successfully finished'));
+    context.clean();
+    return;
+  }
+
+  // 1- skip create class
+  // since we just updating the metadata the class should already exists otherwise the update must fail
+  // load classId from config:
+  context.class.id = config.class.id;
+
+  // 2- set classMetadata
+  console.info(stepTitle`\n\nSetting class metadata ...`);
+  await setClassMetadata(config);
+
+  //3- pin images and generate metadata
+  console.info(stepTitle`\n\nUploading and pinning the NFTs on IPFS ...`);
+  await pinAndSetImageCid(config);
+
+  //4- set metadata for instances
+  console.info(stepTitle`\n\nSetting the instance metadata on chain ...`);
+  await setInstanceMetadata(config);
+
+  if (!dryRunMode) {
+    // move the final data file to the output path, cleanup the checkpoint files.
+    let outFilename = config?.instance?.data?.outputCsvFile;
+    context.data.writeFinalResult(outFilename);
+    console.info(
+      importantMessage(`\n\nThe final datafile is copied at \n ${outFilename}`)
+    );
+  }
+
+  // cleanup the workspace, remove checkpoint files
+  context.clean();
+};
+
 module.exports = {
   runWorkflow,
+  updateMetadata,
 };
