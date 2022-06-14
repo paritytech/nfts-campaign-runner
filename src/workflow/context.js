@@ -24,6 +24,7 @@ const columnTitles = {
   classId: 'classId',
   instanceId: 'instanceId',
   classMetadata: 'classMetadata',
+  classStartInstanceId: 'classStartInstanceId',
   instanceMetadata: 'instanceMetadat',
   secret: 'gift account secret',
   address: 'gift account address',
@@ -71,7 +72,9 @@ const context = {
       try {
         fs.mkdirSync(checkpointFolderPath);
       } catch {
-        throw new WorkflowError(`Unable to create ${checkpointFolderPath} folder. Please check if the parent dir has a write access`);
+        throw new WorkflowError(
+          `Unable to create ${checkpointFolderPath} folder. Please check if the parent dir has a write access`
+        );
       }
     }
 
@@ -89,27 +92,39 @@ const context = {
   pinataClient: undefined,
   class: {
     id: undefined,
+    startInstanceId: undefined,
     metaCid: undefined,
     load: function (wfConfig) {
       let { header, records } = getCheckpointRecords(cpfiles.class) || {};
       if (header) {
-        let [classIdIdx, classMetaIdx] = getColumnIndex(header, [
-          columnTitles.classId,
-          columnTitles.classMetadata,
-        ]);
+        let [classIdIdx, classMetaIdx, startInstanceIdx] = getColumnIndex(
+          header,
+          [
+            columnTitles.classId,
+            columnTitles.classMetadata,
+            columnTitles.classStartInstanceId,
+          ]
+        );
         if (records[0]?.[classIdIdx]) {
           this.id = records[0][classIdIdx];
         }
         if (records[0]?.[classMetaIdx]) {
           this.metaCid = records[0][classMetaIdx];
         }
+        if (records[0]?.[startInstanceIdx]) {
+          this.startInstanceId = records[0][startInstanceIdx];
+        }
       }
     },
     checkpoint: function () {
       writeCsvSync(
         cpfiles.class,
-        [columnTitles.classId, columnTitles.classMetadata],
-        [[this.id, this.metaCid]]
+        [
+          columnTitles.classId,
+          columnTitles.classMetadata,
+          columnTitles.classStartInstanceId,
+        ],
+        [[this.id, this.metaCid, this.startInstanceId]]
       );
     },
   },
@@ -239,7 +254,10 @@ const getContext = () => {
 };
 
 const checkPreviousCheckpoints = async () => {
-  const checkpointExists = fs.existsSync(cpfiles.class) || fs.existsSync(cpfiles.batch) || fs.existsSync(cpfiles.data);
+  const checkpointExists =
+    fs.existsSync(cpfiles.class) ||
+    fs.existsSync(cpfiles.batch) ||
+    fs.existsSync(cpfiles.data);
   if (!checkpointExists) return;
 
   const answer = (await inqAsk([
@@ -255,6 +273,11 @@ const checkPreviousCheckpoints = async () => {
 
   removeCheckpoints();
   console.log(systemMessage('Previous checkpoints removed'));
-}
+};
 
-module.exports = { columnTitles, checkPreviousCheckpoints, loadContext, getContext };
+module.exports = {
+  columnTitles,
+  checkPreviousCheckpoints,
+  loadContext,
+  getContext,
+};

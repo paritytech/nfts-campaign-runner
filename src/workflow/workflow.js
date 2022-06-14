@@ -42,8 +42,11 @@ const createClass = async (wfConfig) => {
   ) {
     // check the specified class does not exist
     let cfgClassId = wfConfig.class.id;
-    let uniquesClass = await api.query.uniques.class(cfgClassId);
-    if (uniquesClass?.isSome) {
+    let uniquesClass = (await api.query.uniques.class(cfgClassId))
+      ?.unwrapOr(undefined)
+      ?.toHuman();
+
+    if (uniquesClass) {
       // class already exists ask user if they want to mint in the same class
       const answer = (await inqAsk([
         {
@@ -59,6 +62,13 @@ const createClass = async (wfConfig) => {
         );
       } else {
         context.class.id = cfgClassId;
+        // set the start instance id to the last id available in the class assuming all instances are minted from 0 to number of current instances.
+        console.log(
+          systemMessage(
+            `The class ${cfgClassId} exists. The new items will be added to the class staring from index ${uniquesClass?.instances}.`
+          )
+        );
+        context.class.startInstanceId = Number(uniquesClass?.instances);
       }
     } else {
       // create a new class
@@ -184,7 +194,10 @@ const mintInstancesInBatch = async (wfConfig) => {
     );
   }
 
-  let startInstanceId = 0;
+  // if class already has instances in it start from the first available id to mint new instances.
+  let startInstanceId = isNumber(context?.class?.startInstanceId)
+    ? parseInt(context?.class?.startInstanceId)
+    : 0;
 
   // load last minted batch from checkpoint
   let batchSize = parseInt(wfConfig?.instance?.batchSize) || 100;
