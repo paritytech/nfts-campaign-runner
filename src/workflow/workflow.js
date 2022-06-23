@@ -44,7 +44,7 @@ const createClass = async (wfConfig) => {
     let cfgClassId = wfConfig.class.id;
     let uniquesClass = (await api.query.uniques.class(cfgClassId))
       ?.unwrapOr(undefined)
-      ?.toHuman();
+      ?.toJSON();
 
     if (uniquesClass) {
       // class already exists ask user if they want to mint in the same class
@@ -62,13 +62,13 @@ const createClass = async (wfConfig) => {
         );
       } else {
         context.class.id = cfgClassId;
+        context.class.startInstanceId = Number(uniquesClass?.instances);
         // set the start instance id to the last id available in the class assuming all instances are minted from 0 to number of current instances.
         console.log(
           systemMessage(
-            `The class ${cfgClassId} exists. The new items will be added to the class staring from index ${uniquesClass?.instances}.`
+            `The class ${cfgClassId} exists. The new items will be added to the class staring from index ${context.class.startInstanceId}.`
           )
         );
-        context.class.startInstanceId = Number(uniquesClass?.instances);
       }
     } else {
       // create a new class
