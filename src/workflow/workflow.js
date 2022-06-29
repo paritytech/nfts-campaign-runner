@@ -62,7 +62,7 @@ const createClass = async (wfConfig) => {
         );
       } else {
         context.class.id = cfgClassId;
-        context.class.startInstanceId = Number(uniquesClass?.instances);
+        context.class.startInstanceId = Number(uniquesClass?.items);
         // set the start instance id to the last id available in the class assuming all instances are minted from 0 to number of current instances.
         console.log(
           systemMessage(
