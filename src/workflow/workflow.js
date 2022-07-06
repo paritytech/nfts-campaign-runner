@@ -4,7 +4,7 @@ const path = require('path');
 const BN = require('bn.js');
 
 const {
-  generateAndSetClassMetadata,
+  generateAndSetCollectionMetadata,
   generateMetadata,
   setMetadataInBatch,
 } = require('./metadata');
@@ -62,7 +62,7 @@ const createClass = async (wfConfig) => {
         );
       } else {
         context.class.id = cfgClassId;
-        context.class.startInstanceId = Number(uniquesClass?.instances);
+        context.class.startInstanceId = Number(uniquesClass?.items);
         // set the start instance id to the last id available in the class assuming all instances are minted from 0 to number of current instances.
         console.log(
           systemMessage(
@@ -88,7 +88,7 @@ const createClass = async (wfConfig) => {
   }
 };
 
-const setClassMetadata = async (wfConfig) => {
+const setCollectionMetadata = async (wfConfig) => {
   // 2-generate/set class metadata
   const context = getContext();
   const { dryRun } = context;
@@ -120,7 +120,7 @@ const setClassMetadata = async (wfConfig) => {
     } else {
       let metadataFolder = wfConfig.metadataFolder;
       let metadataFile = path.join(metadataFolder, 'class.meta');
-      context.class.metaCid = await generateAndSetClassMetadata(
+      context.class.metaCid = await generateAndSetCollectionMetadata(
         context.network,
         context.pinataClient,
         context.class.id,
@@ -644,7 +644,7 @@ const runWorkflow = async (configFile = './src/workflow.json', dryRunMode) => {
 
   // 2- set classMetadata
   console.info(stepTitle`\n\nSetting class metadata ...`);
-  await setClassMetadata(config);
+  await setCollectionMetadata(config);
 
   // 3- generate secrets
   console.info(stepTitle`\n\nGenerating gift secrets ...`);
@@ -717,7 +717,7 @@ const updateMetadata = async (
 
   // 2- set classMetadata
   console.info(stepTitle`\n\nSetting class metadata ...`);
-  await setClassMetadata(config);
+  await setCollectionMetadata(config);
 
   //3- pin images and generate metadata
   console.info(stepTitle`\n\nUploading and pinning the NFTs on IPFS ...`);

@@ -126,9 +126,14 @@ let setMetadataInBatch = async (
   await signAndSendTx(api, call, signingPair, true, dryRun);
 };
 
-let setClassMetadata = async (connection, classId, metadataCid, dryRun) => {
+let setCollectionMetadata = async (
+  connection,
+  classId,
+  metadataCid,
+  dryRun
+) => {
   const { api, signingPair, proxiedAddress } = connection;
-  let tx = api.tx.uniques.setClassMetadata(classId, metadataCid, false);
+  let tx = api.tx.uniques.setCollectionMetadata(classId, metadataCid, false);
 
   let txCall = proxiedAddress
     ? api.tx.proxy.proxy(proxiedAddress, 'Assets', tx)
@@ -137,7 +142,7 @@ let setClassMetadata = async (connection, classId, metadataCid, dryRun) => {
   await signAndSendTx(api, txCall, signingPair, true, dryRun);
 };
 
-const generateAndSetClassMetadata = async (
+const generateAndSetCollectionMetadata = async (
   connection,
   pinataClient,
   classId,
@@ -154,13 +159,13 @@ const generateAndSetClassMetadata = async (
     outputFile
   );
 
-  await setClassMetadata(connection, classId, metaCid);
+  await setCollectionMetadata(connection, classId, metaCid);
 
   return metaCid;
 };
 
 module.exports = {
-  generateAndSetClassMetadata,
+  generateAndSetCollectionMetadata,
   setMetadataInBatch,
   generateMetadata,
 };
