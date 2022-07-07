@@ -1,7 +1,11 @@
 #!/usr/bin/env node
 
 const { Command } = require('commander');
-const { runWorkflow, updateMetadata } = require('./workflow/workflow');
+const {
+  runWorkflow,
+  updateMetadata,
+  renameFolderContent,
+} = require('./workflow/workflow');
 const { errorMessage, finalMessage } = require('./utils/styles');
 const { WorkflowError } = require('./Errors');
 const program = new Command();
@@ -27,6 +31,33 @@ program
   .option('--dry-run', 'Enable dry-run')
   .action(async (workflowConfig, options) => {
     await updateMetadata(workflowConfig, options.dryRun ?? false);
+    console.log(finalMessage('\ndone!'));
+  });
+
+program
+  .command('rename-files')
+  .description(
+    'Rename the files in the src path to an inceremental index starting from the start-index. Saves the renamed files in the destination output path.'
+  )
+  .option(
+    '--start-index <start-index>',
+    'The index that the renamed filenames start from.',
+    1
+  )
+  .requiredOption(
+    '--ext <extension>',
+    'The file extension of the files that are to be renamed.'
+  )
+  .argument(
+    `<input>`,
+    'The input directory that its content is going to be renamed'
+  )
+  .action(async (srcDir, options) => {
+    let startIndex = Number(options.startIndex);
+    if (isNaN(startIndex)) {
+      throw new Error('start-index is not a number!');
+    }
+    renameFolderContent(srcDir, options.ext, Number(options.startIndex));
     console.log(finalMessage('\ndone!'));
   });
 

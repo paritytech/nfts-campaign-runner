@@ -740,7 +740,29 @@ const updateMetadata = async (
   context.clean();
 };
 
+const renameFolderContent = (srcDir, targetExt, startIdx) => {
+  if (!fs.existsSync(srcDir)) {
+    throw new Error('The input directory path does bot exist!');
+  }
+  let fileno = startIdx;
+  let files = fs.readdirSync(srcDir);
+  files.forEach((filename) => {
+    let parts = filename.split('.');
+    let ext = parts.length > 1 ? parts.pop() : undefined;
+    if (!targetExt || ext === targetExt) {
+      let newFileName = ext ? `${fileno}.${ext}` : `${fileno}`;
+      let fromName = path.join(srcDir, filename);
+      let toName = path.join(srcDir, newFileName);
+      fs.rename(fromName, toName, (err) => {
+        throw err;
+      });
+      fileno += 1;
+    }
+  });
+};
+
 module.exports = {
   runWorkflow,
   updateMetadata,
+  renameFolderContent,
 };
