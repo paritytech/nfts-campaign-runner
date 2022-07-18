@@ -161,6 +161,12 @@ const context = {
         }
       }
     },
+    addColumn: function (title) {
+      this.header.push(title);
+      for (let r = 0; r < this.records.length; r++) {
+        this.records[r].push('');
+      }
+    },
     load: function (wfConfig) {
       let datafile = wfConfig?.instance?.data?.csvFile;
       if (!datafile) {
@@ -260,6 +266,7 @@ const checkPreviousCheckpoints = async () => {
     fs.existsSync(cpfiles.data);
   if (!checkpointExists) return;
 
+  /*
   const answer = (await inqAsk([
     {
       type: 'confirm',
@@ -270,7 +277,8 @@ const checkPreviousCheckpoints = async () => {
   ])) || { continueFromCheckpoint: true };
 
   if (answer?.continueFromCheckpoint) return;
-
+  */
+  return;
   removeCheckpoints();
   console.log(systemMessage('Previous checkpoints removed'));
 };
