@@ -249,9 +249,17 @@ const context = {
         [
           columnTitles.lastMintBatch,
           columnTitles.lastMetadataBatch,
+          columnTitles.lastMetaCidBatch,
           columnTitles.lastBalanceTxBatch,
         ],
-        [[this.lastMintBatch, this.lastMetadataBatch, this.lastBalanceTxBatch]]
+        [
+          [
+            this.lastMintBatch,
+            this.lastMetadataBatch,
+            this.lastMetaCidBatch,
+            this.lastBalanceTxBatch,
+          ],
+        ]
       );
     },
   },

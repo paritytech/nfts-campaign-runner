@@ -10,7 +10,7 @@ const {
   setMetadataInBatch,
 } = require('./metadata');
 const { generateSecret } = require('./giftSecrets');
-const { mintClassInstances } = require('./mint');
+const { mintClassInstances, burnInstances } = require('./mint');
 const { transferFunds } = require('./balanceTransfer');
 const {
   columnTitles,
@@ -260,6 +260,7 @@ const mintInstancesInBatch = async (wfConfig) => {
   };
 
   let batchAction = async (batchStartRecordNo, batchEndRecordNo, batchNo) => {
+    let batchStartInstanceId = startInstanceId + (batchNo - 1) * batchSize;
     let ownerAddresses = addressColumn.records;
     await mintClassInstances(
       context.network,
@@ -351,7 +352,7 @@ const pinAndSetImageCid = async (wfConfig) => {
     batchSize,
   };
 
-  let batchAction = async (batchStartRecordNo, batchEndRecordNo, _) => {
+  let batchAction = async (batchStartRecordNo, batchEndRecordNo, batchNo) => {
     let itemsGenerated = 0;
     let totalItems = 0;
     for (let i = batchStartRecordNo; i < batchEndRecordNo; i++) {
@@ -426,7 +427,11 @@ const pinAndSetImageCid = async (wfConfig) => {
     }
   };
 
-  let batchCheckpointCb = async (_, _, batchNo) => {
+  let batchCheckpointCb = async (
+    batchStartRecordNo,
+    batchEndRecordNo,
+    batchNo
+  ) => {
     if (!dryRun) {
       // set data checkpiont
       context.data.checkpoint();
@@ -520,7 +525,11 @@ const setInstanceMetadata = async (wfConfig) => {
     );
   };
 
-  let batchCheckpointCb = async (_, _, batchNo) => {
+  let batchCheckpointCb = async (
+    batchStartRecordNo,
+    batchEndRecordNo,
+    batchNo
+  ) => {
     if (!dryRun) {
       // set data checkpiont
       context.data.checkpoint();
@@ -582,7 +591,11 @@ const sendInitialFunds = async (wfConfig) => {
     );
   };
 
-  let batchCheckpointCb = async (_, _, batchNo) => {
+  let batchCheckpointCb = async (
+    batchStartRecordNo,
+    batchEndRecordNo,
+    batchNo
+  ) => {
     if (!dryRun) {
       // set data checkpiont
       context.data.checkpoint();
@@ -594,6 +607,100 @@ const sendInitialFunds = async (wfConfig) => {
   };
 
   await executeInBatch(batchInfo, batchAction, batchCheckpointCb);
+};
+
+const reapUnusedFunds = async (wfConfig) => {
+  const context = getContext();
+  const { startRecordNo, endRecordNo } = context.data;
+  const { dryRun } = context;
+  const { api, keyring, signingPair: seedKeyPair } = context.network;
+
+  let [secretColumn] = context.data.getColumns([columnTitles.secret]);
+
+  // set the destination address to the address derived from the seed in the workflow
+  let destAddress = seedKeyPair?.address;
+  if (!destAddress) {
+    throw WorkflowError(
+      'was not able to generate the address from the seed specified by network.seed in the workflow file.'
+    );
+  }
+
+  for (let i = startRecordNo; i < endRecordNo; i++) {
+    let sourceKeyPair = keyring.createFromUri(secretColumn.records?.[i]);
+    let sourceAddress = sourceKeyPair?.address;
+    console.log(
+      `row ${i} transfer all funds/reap: ${sourceAddress} => ${destAddress}`
+    );
+    let tx = api.tx.balances.transferAll(destAddress, false);
+    await signAndSendTx(api, tx, sourceKeyPair, false, dryRun);
+  }
+};
+
+const burnUnclaimedInBatch = async (wfConfig) => {
+  const context = getContext();
+  const { startRecordNo, endRecordNo } = context.data;
+  const { dryRun } = context;
+
+  const { api } = context.network;
+
+  // read classId from checkpoint
+  if (context.class.id === undefined) {
+    throw new WorkflowError(
+      'No classId is loaded in context. Either the classId is not specified in the workflow file or the checkpoint is not in correct state.'
+    );
+  }
+  let classId = context.class.id;
+  let [addressColumn] = context.data.getColumns([columnTitles.address]);
+
+  // load last minted batch from checkpoint
+  let batchSize = parseInt(wfConfig?.instance?.batchSize) || 100;
+  let lastCheckpointedBatch = context.batch.lastBurnBatch;
+  let ownerAddresses = addressColumn.records;
+
+  let batchInfo = {
+    startRecordNo,
+    endRecordNo,
+    checkpointedBatchNo: lastCheckpointedBatch,
+    batchSize,
+  };
+
+  let batchAction = async (batchStartRecordNo, batchEndRecordNo, batchNo) => {
+    let batchOwnerAddresses = ownerAddresses.slice(
+      batchStartRecordNo,
+      batchEndRecordNo
+    );
+
+    let unclaimed = await Promise.all(
+      batchOwnerAddresses.map((addr) =>
+        api.query.uniques.account.keys(addr, classId)
+      )
+    );
+    let unclaimedInstances = [];
+    for (let acountAssets of unclaimed) {
+      acountAssets.forEach((key, i) => {
+        let [address, classId, instanceId] = key.args;
+        unclaimedInstances.push(instanceId);
+      });
+    }
+
+    if (unclaimedInstances && unclaimedInstances.length > 0) {
+      await burnInstances(context.network, classId, unclaimedInstances, dryRun);
+    }
+  };
+
+  await executeInBatch(batchInfo, batchAction, () => {});
+};
+
+const enableDryRun = async () => {
+  const context = getContext();
+  const { api } = context.network;
+
+  // validate transactions
+  if (!api.rpc.system.dryRun) {
+    throw new WorkflowError('Dry-run mode is not supported on this network');
+  }
+
+  context.dryRun = true;
 };
 
 const verifyWorkflow = async (wfConfig) => {
@@ -659,18 +766,6 @@ const verifyWorkflow = async (wfConfig) => {
       }
     }
   }
-};
-
-const enableDryRun = async () => {
-  const context = getContext();
-  const { api } = context.network;
-
-  // validate transactions
-  if (!api.rpc.system.dryRun) {
-    throw new WorkflowError('Dry-run mode is not supported on this network');
-  }
-
-  context.dryRun = true;
 };
 
 const runWorkflow = async (configFile = './src/workflow.json', dryRunMode) => {
@@ -782,7 +877,13 @@ const updateMetadata = async (
   console.info(stepTitle`\n\nSetting class metadata ...`);
   await setCollectionMetadata(config);
 
-  await generateAndSetInstanceMetadata(config);
+  //3- pin images and generate metadata
+  console.info(stepTitle`\n\nUploading and pinning the NFTs on IPFS ...`);
+  await pinAndSetImageCid(config);
+
+  //4- set metadata for instances
+  console.info(stepTitle`\n\nSetting the instance metadata on chain ...`);
+  await setInstanceMetadata(config);
 
   if (!dryRunMode) {
     // move the final data file to the output path, cleanup the checkpoint files.
@@ -818,8 +919,66 @@ const renameFolderContent = (srcDir, targetExt, startIdx) => {
   });
 };
 
+const burnAndReap = async (configFile = './src/workflow.json', dryRunMode) => {
+  if (dryRunMode) console.log(importantMessage('\ndry-run mode is on'));
+
+  console.log('> loading the workflow config ...');
+  let { error, config } = parseConfig(configFile);
+
+  if (error) {
+    throw new WorkflowError(error);
+  }
+  console.log('> setting the context for the update metadata workflow ...');
+
+  await checkPreviousCheckpoints();
+  console.log('1');
+  await loadContext(config);
+  let context = getContext();
+
+  // 0- run various checks
+  await verifyWorkflow(config);
+
+  if (dryRunMode) {
+    // TODO: uncomment once we find a true way to detect that method on rpc nodes
+    // await enableDryRun();
+
+    // temporary code
+    console.log(importantMessage('\ndry-run check successfully finished'));
+    context.clean();
+    return;
+  }
+
+  // 1- skip create class
+  // since we want to burn and reap accounts we assume the class in the workflow is already created otherwise it will throw error.
+  // load classId from config:
+  context.class.id = config.class.id;
+
+  // 2- burn unclaimed instances
+  console.info(stepTitle`\n\nBurning unclaimed instances ...`);
+  await burnUnclaimedInBatch(config);
+
+  //3- reap the unclimed secrets and return their fund to the signingAccount
+  console.info(
+    stepTitle`\n\nReclaiming the funds from the unclaimed secrets... `
+  );
+  await reapUnusedFunds(config);
+
+  if (!dryRunMode) {
+    // move the final data file to the output path, cleanup the checkpoint files.
+    let outFilename = config?.instance?.data?.outputCsvFile;
+    context.data.writeFinalResult(outFilename);
+    console.info(
+      importantMessage(`\n\nThe final datafile is copied at \n ${outFilename}`)
+    );
+  }
+
+  // cleanup the workspace, remove checkpoint files
+  context.clean();
+};
+
 module.exports = {
   runWorkflow,
   updateMetadata,
   renameFolderContent,
+  burnAndReap,
 };
