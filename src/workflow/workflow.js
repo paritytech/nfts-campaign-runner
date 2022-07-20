@@ -565,7 +565,7 @@ const sendInitialFunds = async (wfConfig) => {
     !addressColumn.records?.[endRecordNo - 1]
   ) {
     throw new WorkflowError(
-      'No address checkpoint is recorded or the checkpoint is not in a correct state.'
+      'No address column is recorded in the workflow or the checkpoint is not in a correct state.'
     );
   }
 
@@ -626,13 +626,15 @@ const reapUnusedFunds = async (wfConfig) => {
   }
 
   for (let i = startRecordNo; i < endRecordNo; i++) {
-    let sourceKeyPair = keyring.createFromUri(secretColumn.records?.[i]);
-    let sourceAddress = sourceKeyPair?.address;
-    console.log(
-      `row ${i} transfer all funds/reap: ${sourceAddress} => ${destAddress}`
-    );
-    let tx = api.tx.balances.transferAll(destAddress, false);
-    await signAndSendTx(api, tx, sourceKeyPair, false, dryRun);
+    if (secretColumn.records?.[i]) {
+      let sourceKeyPair = keyring.createFromUri(secretColumn.records?.[i]);
+      let sourceAddress = sourceKeyPair?.address;
+      console.log(
+        `row ${i} transfer all funds/reap: ${sourceAddress} => ${destAddress}`
+      );
+      let tx = api.tx.balances.transferAll(destAddress, false);
+      await signAndSendTx(api, tx, sourceKeyPair, false, dryRun);
+    }
   }
 };
 
@@ -651,6 +653,14 @@ const burnUnclaimedInBatch = async (wfConfig) => {
   }
   let classId = context.class.id;
   let [addressColumn] = context.data.getColumns([columnTitles.address]);
+  if (
+    !addressColumn.records?.[startRecordNo] ||
+    !addressColumn.records?.[endRecordNo - 1]
+  ) {
+    throw new WorkflowError(
+      'No address column is recorded in the workflow or the checkpoint is not in a correct state.'
+    );
+  }
 
   // load last minted batch from checkpoint
   let batchSize = parseInt(wfConfig?.instance?.batchSize) || 100;
