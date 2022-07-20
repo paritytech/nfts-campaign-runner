@@ -9,7 +9,7 @@ const {
   getColumnIndex,
   getColumns,
 } = require('../utils/csv');
-const { systemMessage } = require('../utils/styles');
+const { notificationMessage } = require('../utils/styles');
 const { WorkflowError } = require('../Errors');
 
 const inqAsk = inquirer.createPromptModule();
@@ -249,9 +249,17 @@ const context = {
         [
           columnTitles.lastMintBatch,
           columnTitles.lastMetadataBatch,
+          columnTitles.lastMetaCidBatch,
           columnTitles.lastBalanceTxBatch,
         ],
-        [[this.lastMintBatch, this.lastMetadataBatch, this.lastBalanceTxBatch]]
+        [
+          [
+            this.lastMintBatch,
+            this.lastMetadataBatch,
+            this.lastMetaCidBatch,
+            this.lastBalanceTxBatch,
+          ],
+        ]
       );
     },
   },
@@ -287,7 +295,7 @@ const checkPreviousCheckpoints = async () => {
 
   if (answer?.continueFromCheckpoint) return;
   removeCheckpoints();
-  console.log(systemMessage('Previous checkpoints removed'));
+  console.log(notificationMessage('Previous checkpoints removed'));
 };
 
 module.exports = {
