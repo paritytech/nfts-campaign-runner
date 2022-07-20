@@ -27,9 +27,10 @@ let burnInstances = async (network, classId, instanceIds, dryRun) => {
   const { api, signingPair, proxiedAddress } = network;
 
   let txs = [];
-  instanceIds?.forEach((instanceId) =>
-    txs.push(api.tx.uniques.burn(classId, instanceId, null))
-  );
+  instanceIds?.forEach((instanceId) => {
+    txs.push(api.tx.uniques.burn(classId, instanceId, null));
+    txs.push(api.tx.uniques.clearMetadata(classId, instanceId));
+  });
 
   let txBatch = api.tx.utility.batchAll(txs);
   let call = proxiedAddress
