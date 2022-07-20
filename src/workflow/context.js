@@ -33,6 +33,7 @@ const columnTitles = {
   metaCid: 'metadata cid',
   lastMintBatch: 'last minted batch',
   lastMetadataBatch: 'last metadata batch',
+  lastMetaCidBatch: 'last metaCid batch',
   lastBalanceTxBatch: 'last balance transfer batch',
 };
 
@@ -161,6 +162,12 @@ const context = {
         }
       }
     },
+    addColumn: function (title) {
+      this.header.push(title);
+      for (let r = 0; r < this.records.length; r++) {
+        this.records[r].push('');
+      }
+    },
     load: function (wfConfig) {
       let datafile = wfConfig?.instance?.data?.csvFile;
       if (!datafile) {
@@ -205,19 +212,28 @@ const context = {
   },
   batch: {
     lastMintBatch: 0,
+    lastMetaCidBatch: 0,
     lastMetadataBatch: 0,
     lastBalanceTxBatch: 0,
     load: function (wfConfig) {
       let { header, records } = getCheckpointRecords(cpfiles.batch) || {};
       if (header) {
-        let [lastMintBatchIdx, lastMetaBatchIdx, lastBalanceTxBatchIdx] =
-          getColumnIndex(header, [
-            columnTitles.lastMintBatch,
-            columnTitles.lastMetadataBatch,
-            columnTitles.lastBalanceTxBatch,
-          ]);
+        let [
+          lastMintBatchIdx,
+          lastMetaBatchIdx,
+          lastMetaCidBatchIdx,
+          lastBalanceTxBatchIdx,
+        ] = getColumnIndex(header, [
+          columnTitles.lastMintBatch,
+          columnTitles.lastMetadataBatch,
+          columnTitles.lastMetaCidBatch,
+          columnTitles.lastBalanceTxBatch,
+        ]);
         if (records[0]?.[lastMintBatchIdx]) {
           this.lastMintBatch = parseInt(records[0][lastMintBatchIdx]);
+        }
+        if (records[0]?.[lastMetaCidBatchIdx]) {
+          this.lastMetaCidBatch = parseInt(records[0][lastMetaCidBatchIdx]);
         }
         if (records[0]?.[lastMetaBatchIdx]) {
           this.lastMetadataBatch = parseInt(records[0][lastMetaBatchIdx]);
@@ -270,7 +286,6 @@ const checkPreviousCheckpoints = async () => {
   ])) || { continueFromCheckpoint: true };
 
   if (answer?.continueFromCheckpoint) return;
-
   removeCheckpoints();
   console.log(systemMessage('Previous checkpoints removed'));
 };

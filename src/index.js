@@ -5,6 +5,7 @@ const {
   runWorkflow,
   updateMetadata,
   renameFolderContent,
+  burnAndReap,
 } = require('./workflow/workflow');
 const { errorMessage, finalMessage } = require('./utils/styles');
 const { WorkflowError } = require('./Errors');
@@ -62,6 +63,18 @@ program
   });
 
 program
+  .command('burn-reap')
+  .description(
+    'Burn the nft items owned by each account/secret and transfer any balance from the account to the original/admin account.'
+  )
+  .argument(`<workflow-config>`, 'the workflow configuration file')
+  .option('--dry-run', 'Enable dry-run')
+  .action(async (workflowConfig, options) => {
+    await burnAndReap(workflowConfig, options.dryRun ?? false);
+    console.log(finalMessage('\ndone!'));
+  });
+
+program
   .parseAsync(process.argv)
   .then(() => process.exit(0))
   .catch((err) => {
@@ -72,3 +85,20 @@ program
     }
     process.exit(1);
   });
+
+/*
+  const tryToSucceed = () => {
+  updateMetadata(
+    '/Users/hra/Workspace/Parity/Git/uniques-campaign-runner/Decoded/setmeta/workflow.json',
+    false
+  )
+    .then(() => process.exit(0))
+    .catch((err) => {
+      console.log('err');
+      console.error(err);
+      setTimeout(tryToSucceed, 60000);
+    });
+};
+
+tryToSucceed();
+*/

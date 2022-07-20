@@ -2,7 +2,8 @@ const inquirer = require('inquirer');
 const fs = require('fs');
 const path = require('path');
 const BN = require('bn.js');
-
+const { setTimeout } = require('timers/promises');
+const assert = require('assert');
 const {
   generateAndSetCollectionMetadata,
   generateMetadata,
@@ -28,6 +29,45 @@ const {
   stepTitle,
   systemMessage,
 } = require('../utils/styles');
+
+const executeInBatch = async (batchInfo, action, callback) => {
+  let { startRecordNo, endRecordNo, checkpointedBatchNo, batchSize } =
+    batchInfo;
+
+  assert(isNumber(startRecordNo), 'batch startRecordNo is not a valid number');
+  assert(isNumber(endRecordNo), 'batch endRecordNo is not a valid number');
+  assert(isNumber(batchSize), 'batchSize is not a valid number');
+
+  if (checkpointedBatchNo) {
+    assert(
+      isNumber(checkpointedBatchNo),
+      'checkpoinyed batch number is not a valid number'
+    );
+    console.log(systemMessage('Checkpoint data spotted'));
+  }
+
+  let lastBatch = checkpointedBatchNo ?? 0;
+  if (lastBatch) {
+    if (startRecordNo + lastBatch * batchSize < endRecordNo) {
+      console.log(systemMessage(`Continuing from batch #${lastBatch}\n\n`));
+    } else {
+      console.log(importantMessage('Nothing left to run'));
+    }
+  }
+
+  while (startRecordNo + lastBatch * batchSize < endRecordNo) {
+    console.log(`Sending batch number ${lastBatch + 1}`);
+    let batchStartRecordNo = startRecordNo + lastBatch * batchSize;
+    let batchEndRecordNo = Math.min(
+      startRecordNo + (lastBatch + 1) * batchSize,
+      endRecordNo
+    );
+
+    await action(batchStartRecordNo, batchEndRecordNo, lastBatch + 1);
+    await callback(batchStartRecordNo, batchEndRecordNo, lastBatch + 1);
+    lastBatch += 1;
+  }
+};
 
 const createClass = async (wfConfig) => {
   // 1- create class
@@ -184,7 +224,16 @@ const mintInstancesInBatch = async (wfConfig) => {
     );
   }
 
-  let [addressColumn] = context.data.getColumns([columnTitles.address]);
+  let [addressColumn, instanceIdColumn] = context.data.getColumns([
+    columnTitles.address,
+    columnTitles.instanceId,
+  ]);
+  // add instanceId column if not exists
+  if (instanceIdColumn.records.length === 0) {
+    context.data.addColumn(columnTitles.instanceId);
+  }
+
+  // check Address column exists
   if (
     !addressColumn.records?.[startRecordNo] ||
     !addressColumn.records?.[endRecordNo - 1]
@@ -194,34 +243,24 @@ const mintInstancesInBatch = async (wfConfig) => {
     );
   }
 
-  // if class already has instances in it start from the first available id to mint new instances.
+  // if class already has instances, start from the first available id to mint new instances.
   let startInstanceId = isNumber(context?.class?.startInstanceId)
     ? parseInt(context?.class?.startInstanceId)
     : 0;
 
   // load last minted batch from checkpoint
   let batchSize = parseInt(wfConfig?.instance?.batchSize) || 100;
-  let lastBatch = context.batch.lastMintBatch;
+  let lastCheckpointedBatch = context.batch.lastMintBatch;
 
-  if (lastBatch) {
-    console.log(systemMessage('Checkpoint data spotted'));
+  let batchInfo = {
+    startRecordNo,
+    endRecordNo,
+    checkpointedBatchNo: lastCheckpointedBatch,
+    batchSize,
+  };
 
-    if (startRecordNo + lastBatch * batchSize < endRecordNo) {
-      console.log(systemMessage(`Continuing from batch #${lastBatch}\n\n`));
-    } else {
-      console.log(importantMessage('Nothing left to mint'));
-    }
-  }
-
-  let ownerAddresses = addressColumn.records;
-  while (startRecordNo + lastBatch * batchSize < endRecordNo) {
-    console.log(`Sending batch number ${lastBatch + 1}`);
-    let batchStartInstanceId = startInstanceId + lastBatch * batchSize;
-    let batchStartRecordNo = startRecordNo + lastBatch * batchSize;
-    let batchEndRecordNo = Math.min(
-      startRecordNo + (lastBatch + 1) * batchSize,
-      endRecordNo
-    );
+  let batchAction = async (batchStartRecordNo, batchEndRecordNo, batchNo) => {
+    let ownerAddresses = addressColumn.records;
     await mintClassInstances(
       context.network,
       context.class.id,
@@ -230,26 +269,30 @@ const mintInstancesInBatch = async (wfConfig) => {
       dryRun
     );
 
-    lastBatch += 1;
-    console.log(`Batch number ${lastBatch} was minted successfully`);
-    context.batch.lastMintBatch = lastBatch;
-    if (!dryRun) context.batch.checkpoint();
-  }
-
-  // all instances are minted. set the instanceId for each record in data checkpoint.
-  let currentInstanceId = startInstanceId;
-  let instanceIdColumn = { title: columnTitles.instanceId, records: [] };
-  for (let i = 0; i <= context.data.records.length; i++) {
-    if (i > instanceIdColumn.records.length) {
-      instanceIdColumn.records.push('');
-    }
-    if (i >= startRecordNo && i < endRecordNo) {
+    let currentInstanceId = startInstanceId + (batchNo - 1) * batchSize;
+    for (let i = batchStartRecordNo; i < batchEndRecordNo; i++) {
       instanceIdColumn.records[i] = currentInstanceId;
       currentInstanceId += 1;
     }
-  }
-  context.data.setColumns([instanceIdColumn]);
-  if (!dryRun) context.data.checkpoint();
+    context.data.setColumns([instanceIdColumn]);
+  };
+
+  let batchCheckpointCb = async (
+    batchStartRecordNo,
+    batchEndRecordNo,
+    batchNo
+  ) => {
+    if (!dryRun) {
+      // set checkpiont for instanceIds
+      context.data.checkpoint();
+
+      // set checkpoint for mint batch
+      context.batch.lastMintBatch = batchNo;
+      context.batch.checkpoint();
+    }
+  };
+
+  await executeInBatch(batchInfo, batchAction, batchCheckpointCb);
 };
 
 const formatFileName = (fileNameTemplate, rowNumber, { header, records }) => {
@@ -262,12 +305,19 @@ const formatFileName = (fileNameTemplate, rowNumber, { header, records }) => {
 
 const pinAndSetImageCid = async (wfConfig) => {
   // 5- pin images and generate metadata
-  let context = getContext();
+  const context = getContext();
   const { startRecordNo, endRecordNo } = context.data;
   const { dryRun } = context;
+
+  // set the metadata for instances in batch
+  let batchSize = parseInt(wfConfig?.instance?.batchSize) || 100;
+  let lastCheckpointedBatch = context.batch.lastMetaCidBatch || 0;
+
   const rowNumber = (zerobasedIdx) => zerobasedIdx + 2;
   const instanceMetadata = wfConfig?.instance?.metadata;
-  if (isEmptyObject(instanceMetadata)) return;
+  if (isEmptyObject(instanceMetadata)) {
+    return;
+  }
   const {
     name,
     description,
@@ -283,20 +333,28 @@ const pinAndSetImageCid = async (wfConfig) => {
       columnTitles.metaCid,
       columnTitles.videoCid,
     ]);
-  let itemsGenerated = 0;
-  let totalItems = 0;
-  for (let i = 0; i < context.data.records.length; i++) {
-    if (i >= imageCidColumn.records.length) {
-      imageCidColumn.records.push('');
-    }
-    if (i >= videoCidColumn.records.length) {
-      videoCidColumn.records.push('');
-    }
-    if (i >= metaCidColumn.records.length) {
-      metaCidColumn.records.push('');
-    }
 
-    if (i >= startRecordNo && i < endRecordNo) {
+  // add missing columns
+  if (imageCidColumn.records.length === 0) {
+    context.data.addColumn(columnTitles.imageCid);
+  }
+  if (metaCidColumn.records.length === 0) {
+    context.data.addColumn(columnTitles.metaCid);
+  }
+  if (videoCidColumn.records.length === 0) {
+    context.data.addColumn(columnTitles.videoCid);
+  }
+  let batchInfo = {
+    startRecordNo,
+    endRecordNo,
+    checkpointedBatchNo: lastCheckpointedBatch,
+    batchSize,
+  };
+
+  let batchAction = async (batchStartRecordNo, batchEndRecordNo, _) => {
+    let itemsGenerated = 0;
+    let totalItems = 0;
+    for (let i = batchStartRecordNo; i < batchEndRecordNo; i++) {
       ++totalItems;
       if (metaCidColumn.records[i]) {
         console.log(`metadata for the row #${i} is already uploaded, skipping`);
@@ -360,14 +418,26 @@ const pinAndSetImageCid = async (wfConfig) => {
       metaCidColumn.records[i] = metaCid;
       ++itemsGenerated;
     }
-  }
-  if (itemsGenerated) {
-    context.data.setColumns([imageCidColumn, metaCidColumn, videoCidColumn]);
-    if (!dryRun) context.data.checkpoint();
-    console.log(`${itemsGenerated} metadata(s) uploaded`);
-  } else if (!totalItems) {
-    console.log(importantMessage('No metadata was uploaded'));
-  }
+    if (itemsGenerated) {
+      context.data.setColumns([imageCidColumn, metaCidColumn, videoCidColumn]);
+      console.log(`${itemsGenerated} metadata(s) uploaded`);
+    } else if (!totalItems) {
+      console.log(importantMessage('No metadata was uploaded'));
+    }
+  };
+
+  let batchCheckpointCb = async (_, _, batchNo) => {
+    if (!dryRun) {
+      // set data checkpiont
+      context.data.checkpoint();
+
+      // set checkpoint batch
+      context.batch.lastMetaCidBatch = batchNo;
+      context.batch.checkpoint();
+    }
+  };
+
+  await executeInBatch(batchInfo, batchAction, batchCheckpointCb);
 };
 
 const setInstanceMetadata = async (wfConfig) => {
@@ -385,6 +455,9 @@ const setInstanceMetadata = async (wfConfig) => {
   const context = getContext();
   const { startRecordNo, endRecordNo } = context.data;
   const { dryRun } = context;
+
+  let batchSize = parseInt(wfConfig?.instance?.batchSize) || 100;
+  let lastCheckpointedBatch = context.batch.lastMetadataBatch || 0;
 
   // read classId from checkpoint
   if (context.class.id === undefined) {
@@ -416,57 +489,49 @@ const setInstanceMetadata = async (wfConfig) => {
     );
   }
 
-  // set the metadata for instances in batch
-  let batchSize = parseInt(wfConfig?.instance?.batchSize) || 100;
-  let lastBatch = context.batch.lastMetadataBatch || 0;
+  let batchInfo = {
+    startRecordNo,
+    endRecordNo,
+    checkpointedBatchNo: lastCheckpointedBatch,
+    batchSize,
+  };
 
-  if (lastBatch) {
-    console.log(systemMessage('Checkpoint data spotted'));
-
-    if (startRecordNo + lastBatch * batchSize < endRecordNo) {
-      console.log(systemMessage(`Continuing from batch #${lastBatch}\n\n`));
-    } else {
-      console.log(importantMessage('Nothing left to mint'));
+  const batchAction = async (batchStartRecordNo, batchEndRecordNo, _) => {
+    let instanceMetadatas = [];
+    // iterate the rows from startRecordNo to endRecordNo and collect recorded metadata info
+    for (let i = batchStartRecordNo; i < batchEndRecordNo; i++) {
+      if (!isNumber(instanceIdColumn.records?.[i])) {
+        throw new WorkflowError(
+          `No instanceId is recorded for row#: ${i} or the checkpoint is not in a correct state.`
+        );
+      }
+      const metadata = {
+        instanceId: instanceIdColumn.records[i],
+        metaCid: metaCidColumn.records[i],
+      };
+      instanceMetadatas.push(metadata);
     }
-  }
-
-  let instanceMetadatas = [];
-  // iterate the rows from startRecordNo to endRecordNo and collect recorded metadata info
-  for (let i = startRecordNo; i < endRecordNo; i++) {
-    if (!isNumber(instanceIdColumn.records?.[i])) {
-      throw new WorkflowError(
-        `No instanceId is recorded for row#: ${i} or the checkpoint is not in a correct state.`
-      );
-    }
-    const metadata = {
-      instanceId: instanceIdColumn.records[i],
-      metaCid: metaCidColumn.records[i],
-    };
-    instanceMetadatas.push(metadata);
-  }
-
-  while (startRecordNo + lastBatch * batchSize < endRecordNo) {
-    console.log(`Sending batch number ${lastBatch + 1}`);
-    let batchStartRecordNo = startRecordNo + lastBatch * batchSize;
-    let batchEndRecordNo = Math.min(
-      startRecordNo + (lastBatch + 1) * batchSize,
-      endRecordNo
-    );
 
     await setMetadataInBatch(
       context.network,
       context.class.id,
-      instanceMetadatas.slice(
-        batchStartRecordNo - startRecordNo,
-        batchEndRecordNo - startRecordNo
-      ),
+      instanceMetadatas,
       dryRun
     );
-    lastBatch += 1;
-    console.log(`Batch number ${lastBatch} was minted successfully`);
-    context.batch.lastMetadataBatch = lastBatch;
-    if (!dryRun) context.batch.checkpoint();
-  }
+  };
+
+  let batchCheckpointCb = async (_, _, batchNo) => {
+    if (!dryRun) {
+      // set data checkpiont
+      context.data.checkpoint();
+
+      // set checkpoint batch
+      context.batch.lastMetadataBatch = batchNo;
+      context.batch.checkpoint();
+    }
+  };
+
+  await executeInBatch(batchInfo, batchAction, batchCheckpointCb);
 };
 
 const sendInitialFunds = async (wfConfig) => {
@@ -497,40 +562,38 @@ const sendInitialFunds = async (wfConfig) => {
 
   // load last balanceTx batch from checkpoint
   let batchSize = parseInt(wfConfig?.instance?.batchSize) || 100;
-  let lastBatch = context.batch.lastBalanceTxBatch;
-
-  if (lastBatch) {
-    console.log(systemMessage('Checkpoint data spotted'));
-
-    if (startRecordNo + lastBatch * batchSize < endRecordNo) {
-      console.log(systemMessage(`Continuing from batch #${lastBatch}\n\n`));
-    } else {
-      console.log(
-        importantMessage('All the addresses were funded successfully')
-      );
-    }
-  }
+  let lastCheckpointedBatch = context.batch.lastBalanceTxBatch;
 
   let ownerAddresses = addressColumn.records;
-  while (startRecordNo + lastBatch * batchSize < endRecordNo) {
-    console.log(`Sending batch number ${lastBatch + 1}`);
-    let batchStartRecordNo = startRecordNo + lastBatch * batchSize;
-    let batchEndRecordNo = Math.min(
-      startRecordNo + (lastBatch + 1) * batchSize,
-      endRecordNo
-    );
+
+  let batchInfo = {
+    startRecordNo,
+    endRecordNo,
+    checkpointedBatchNo: lastCheckpointedBatch,
+    batchSize,
+  };
+
+  const batchAction = async (batchStartRecordNo, batchEndRecordNo, _) => {
     await transferFunds(
       context.network,
       ownerAddresses.slice(batchStartRecordNo, batchEndRecordNo),
       amount,
       dryRun
     );
+  };
 
-    lastBatch += 1;
-    console.log(`Batch number ${lastBatch} was funded successfully`);
-    context.batch.lastBalanceTxBatch = lastBatch;
-    if (!dryRun) context.batch.checkpoint();
-  }
+  let batchCheckpointCb = async (_, _, batchNo) => {
+    if (!dryRun) {
+      // set data checkpiont
+      context.data.checkpoint();
+
+      // set checkpoint batch
+      context.batch.lastBalanceTxBatch = batchNo;
+      context.batch.checkpoint();
+    }
+  };
+
+  await executeInBatch(batchInfo, batchAction, batchCheckpointCb);
 };
 
 const verifyWorkflow = async (wfConfig) => {
@@ -719,13 +782,7 @@ const updateMetadata = async (
   console.info(stepTitle`\n\nSetting class metadata ...`);
   await setCollectionMetadata(config);
 
-  //3- pin images and generate metadata
-  console.info(stepTitle`\n\nUploading and pinning the NFTs on IPFS ...`);
-  await pinAndSetImageCid(config);
-
-  //4- set metadata for instances
-  console.info(stepTitle`\n\nSetting the instance metadata on chain ...`);
-  await setInstanceMetadata(config);
+  await generateAndSetInstanceMetadata(config);
 
   if (!dryRunMode) {
     // move the final data file to the output path, cleanup the checkpoint files.
