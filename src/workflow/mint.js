@@ -27,10 +27,19 @@ let burnInstances = async (network, classId, instanceIds, dryRun) => {
   const { api, signingPair, proxiedAddress } = network;
 
   let txs = [];
-  instanceIds?.forEach((instanceId) => {
+  for (let instanceId of instanceIds) {
     txs.push(api.tx.uniques.burn(classId, instanceId, null));
-    txs.push(api.tx.uniques.clearMetadata(classId, instanceId));
-  });
+
+    const hasMetadata = (
+      await api.query.uniques.instanceMetadataOf(classId, instanceId)
+    ).isSome;
+    // if instance has metadata, clear its metadata
+    if (hasMetadata) {
+      txs.push(api.tx.uniques.clearMetadata(classId, instanceId));
+    }
+  }
+
+  instanceIds?.forEach((instanceId) => {});
 
   let txBatch = api.tx.utility.batchAll(txs);
   let call = proxiedAddress

@@ -27,7 +27,7 @@ const { isNumber, isEmptyObject } = require('../utils');
 const {
   importantMessage,
   stepTitle,
-  systemMessage,
+  notificationMessage,
 } = require('../utils/styles');
 
 const executeInBatch = async (batchInfo, action, callback) => {
@@ -43,13 +43,15 @@ const executeInBatch = async (batchInfo, action, callback) => {
       isNumber(checkpointedBatchNo),
       'checkpoinyed batch number is not a valid number'
     );
-    console.log(systemMessage('Checkpoint data spotted'));
+    console.log(notificationMessage('Checkpoint data spotted'));
   }
 
   let lastBatch = checkpointedBatchNo ?? 0;
   if (lastBatch) {
     if (startRecordNo + lastBatch * batchSize < endRecordNo) {
-      console.log(systemMessage(`Continuing from batch #${lastBatch}\n\n`));
+      console.log(
+        notificationMessage(`Continuing from batch #${lastBatch}\n\n`)
+      );
     } else {
       console.log(importantMessage('Nothing left to run'));
     }
@@ -105,7 +107,7 @@ const createClass = async (wfConfig) => {
         context.class.startInstanceId = Number(uniquesClass?.items);
         // set the start instance id to the last id available in the class assuming all instances are minted from 0 to number of current instances.
         console.log(
-          systemMessage(
+          notificationMessage(
             `The class ${cfgClassId} exists. The new items will be added to the class staring from index ${context.class.startInstanceId}.`
           )
         );
@@ -123,7 +125,7 @@ const createClass = async (wfConfig) => {
     if (!dryRun) context.class.checkpoint();
   } else {
     console.log(
-      systemMessage('Class information loaded from the checkpoint file')
+      notificationMessage('Class information loaded from the checkpoint file')
     );
   }
 };
@@ -171,7 +173,9 @@ const setCollectionMetadata = async (wfConfig) => {
       if (!dryRun) context.class.checkpoint();
     }
   } else {
-    console.log(systemMessage('Re-using class metadata from the checkpoint'));
+    console.log(
+      notificationMessage('Re-using class metadata from the checkpoint')
+    );
   }
 };
 
@@ -450,7 +454,7 @@ const setInstanceMetadata = async (wfConfig) => {
   const instanceMetadata = wfConfig?.instance?.metadata;
   if (isEmptyObject(instanceMetadata)) {
     console.log(
-      systemMessage(
+      notificationMessage(
         'Skipped! No instance metadata is configured for the workflow'
       )
     );
@@ -630,8 +634,35 @@ const reapUnusedFunds = async (wfConfig) => {
       let sourceKeyPair = keyring.createFromUri(secretColumn.records?.[i]);
       let sourceAddress = sourceKeyPair?.address;
       console.log(
-        `row ${i} transfer all funds/reap: ${sourceAddress} => ${destAddress}`
+        `\nrow ${i} - transfer all funds/reap: ${sourceAddress} => ${destAddress})`
       );
+
+      // check the account does not have any nfts.
+      let nfts = await api.query.uniques.account.keys(sourceAddress);
+      if (nfts.length !== 0) {
+        console.log(
+          notificationMessage(
+            `${sourceAddress} has ${nfts.length} NFTs. Can not be reaped.`
+          )
+        );
+        continue;
+      }
+
+      // check if account has any balances
+      // retrieve the balance, once-off at the latest block
+      const {
+        data: { free },
+      } = (await api.query.system.account(sourceAddress)).toJSON();
+      console.log(`free balance to claim: ${free}`);
+      if (free === 0) {
+        console.log(
+          notificationMessage(
+            `${sourceAddress} has no free balance to transfer.`
+          )
+        );
+        continue;
+      }
+
       let tx = api.tx.balances.transferAll(destAddress, false);
       await signAndSendTx(api, tx, sourceKeyPair, false, dryRun);
     }
