@@ -70,8 +70,8 @@ Note:
 - If the calculated row numbers fall outside of the number of rows in the csv file (e.x. `offset+count-1 > last_row_number_in_the_file`) the minting will stop after the last row number.
 - The `instance.metadata.imageFile` specifies the file path that contains the media file that is going to be minted.
 - The `instance.metadata.videoFile` specifies the file path that contains the video file that is going to be minted. Has the same naming format as `instance.metadata.imageFile`.
-- the values surrounded between `<<` and `>>` will be filled from the collumns of the data `.csv` file. e.g. fo the
-  Path example: `/Users/user/nfts/<<image name>>.png` the `<<image name>>` will be replaced with the value in the "image name" column according for each row number in the csv datafile.
+- the values surrounded by `<<` and `>>` will be filled from the collumns of the data `.csv` file. e.g. fo the
+  path example: `/Users/user/nfts/<<image name>>.png` the `<<image name>>` will be replaced with the value from the "image name" column for each row in the csv datafile.
   Additionally, you can use an empty template: `/Users/user/nfts/<<>>.png` in which the `<<>>` will be replaced with the row numbers for each row.
 
 ## Using the CLI
@@ -84,21 +84,21 @@ To run the workflow you need to execute the cli with `run ` subcommand while pas
 uniqcamp run <path to workflow.json>
 ```
 
-There is an optional parameter available for the dry-run. It will validate the workflow without submitting transactions.
+There is also an optional parameter available for the dry-run. It will validate the workflow without running the workflow and submitting transactions.
 
 ```
 uniqcamp run --dry-run <path to workflow.json>
 ```
 
-After the minted process is complete a final `.csv` data file will be generated at the same path as input datafile (specified by `instance.data.csvFile`), This final data file will include the gift secret codes as well some more information.
+After the minting process is complete a final `.csv` data file will be generated at the same path as input datafile (specified by `instance.data.csvFile`), This final data file will include the gift secret codes as well some more information.
 
 ### Setting or changing the item metadata
 
-In some cases, it might be needed to set or change the matadata for the items after the collection items are minted. For those cases, the cli also provides an `update-metadata` command. The command is very similar to the `run` command as it also takes the path to a workflow .json file as argument, but unlike the `run` command that goes through the whole workflow, `update-metadata` only sets the metadata based on the information specified in the workflow assuming the collection and items are already minted.
+In some cases, it might be needed to set or change the matadata for the items after the collection items are minted. For those cases, the cli also provides an `update-metadata` subcommand. This subcommand is very similar to the `run` subcommand as it also takes the path to a workflow .json file as argument, but unlike the `run` subcommand that goes through the whole workflow, `update-metadata` only sets the metadata based on the information specified in the workflow, assuming the collection and items are already created.
 
 ### burn-reap
 
-This command can be used to burn the unclaimed NFTs and reap the initial funds from unclaimed secrets and transfer the funds back to the original account. The command basically goes through all the gift secrets in the `.csv` file that is specified by the `instance.data.csvFile` in the workflow, and for each unclaimed secret (secrets that their recipiant has not claimed its NFT) it will burn the unclaimed NFTs. It will also transfer all the funds from that gift secret to the original account that is specified by `network.accountSeed`.
+This command can be used to burn the unclaimed NFTs and reap the initial funds from unclaimed secrets and transfer the funds back to the original account. The command basically goes through all the gift secrets listed in the `.csv` file that is specified by the `instance.data.csvFile` in the workflow, and for each unclaimed secret (secrets that their recipiant has not claimed its NFT) it will burn the unclaimed NFTs. It will also transfer all the funds from that gift secret to the original account that is specified by `network.accountSeed`.
 
 ## Checkpoints
 
