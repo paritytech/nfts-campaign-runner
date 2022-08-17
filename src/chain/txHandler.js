@@ -25,7 +25,13 @@ const decodeResult = (api, result) => {
   return { success, events, error };
 };
 
-exports.signAndSendTx = async (api, tx, signingPair, finalize = true, dryRun = false) => {
+exports.signAndSendTx = async (
+  api,
+  tx,
+  signingPair,
+  finalize = true,
+  dryRun = false
+) => {
   return new Promise((resolve, reject) => {
     let cb = ({ success, events, error }) => {
       if (!success) {
@@ -57,7 +63,10 @@ exports.signAndSendTx = async (api, tx, signingPair, finalize = true, dryRun = f
                 status.asInBlock
               } [success = ${dispatchResult.success}]`
             );
-            !finalize && cb && cb({ ...dispatchResult });
+            if (!finalize) {
+              cb && cb({ ...dispatchResult });
+              unsub();
+            }
           } else if (status.isBroadcast) {
             console.log('Transaction broadcasted.');
           } else if (status.isFinalized) {

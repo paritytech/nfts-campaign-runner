@@ -58,7 +58,7 @@ const executeInBatch = async (batchInfo, action, callback) => {
   }
 
   while (startRecordNo + lastBatch * batchSize < endRecordNo) {
-    console.log(`Sending batch number ${lastBatch + 1}`);
+    console.log(`\n\nSending batch number ${lastBatch + 1}`);
     let batchStartRecordNo = startRecordNo + lastBatch * batchSize;
     let batchEndRecordNo = Math.min(
       startRecordNo + (lastBatch + 1) * batchSize,
@@ -628,45 +628,64 @@ const reapUnusedFunds = async (wfConfig) => {
       'was not able to generate the address from the seed specified by network.seed in the workflow file.'
     );
   }
+  // load last minted batch from checkpoint
+  let batchSize = parseInt(wfConfig?.instance?.batchSize) || 100;
 
-  for (let i = startRecordNo; i < endRecordNo; i++) {
-    if (secretColumn.records?.[i]) {
-      let sourceKeyPair = keyring.createFromUri(secretColumn.records?.[i]);
-      let sourceAddress = sourceKeyPair?.address;
-      console.log(
-        `\nrow ${i} - transfer all funds/reap: ${sourceAddress} => ${destAddress})`
-      );
+  let batchInfo = {
+    startRecordNo,
+    endRecordNo,
+    checkpointedBatchNo: 0,
+    batchSize,
+  };
 
-      // check the account does not have any nfts.
-      let nfts = await api.query.uniques.account.keys(sourceAddress);
-      if (nfts.length !== 0) {
+  const batchAction = async (batchStartRecordNo, batchEndRecordNo, batchNo) => {
+    let txs = [];
+    for (let i = batchStartRecordNo; i < batchEndRecordNo; i++) {
+      if (secretColumn.records?.[i]) {
+        let sourceKeyPair = keyring.createFromUri(secretColumn.records?.[i]);
+        let sourceAddress = sourceKeyPair?.address;
         console.log(
-          notificationMessage(
-            `${sourceAddress} has ${nfts.length} NFTs. Can not be reaped.`
-          )
+          `\nrow ${i} - transfer all funds/reap: ${sourceAddress} => ${destAddress}`
         );
-        continue;
-      }
 
-      // check if account has any balances
-      // retrieve the balance, once-off at the latest block
-      const {
-        data: { free },
-      } = (await api.query.system.account(sourceAddress)).toJSON();
-      console.log(`free balance to claim: ${free}`);
-      if (free === 0) {
-        console.log(
-          notificationMessage(
-            `${sourceAddress} has no free balance to transfer.`
-          )
-        );
-        continue;
-      }
+        // check the account does not have any nfts.
+        let nfts = await api.query.uniques.account.keys(sourceAddress);
+        if (nfts.length !== 0) {
+          console.log(
+            notificationMessage(
+              `${sourceAddress} has ${nfts.length} NFTs. Can not be reaped.`
+            )
+          );
+          continue;
+        }
 
-      let tx = api.tx.balances.transferAll(destAddress, false);
-      await signAndSendTx(api, tx, sourceKeyPair, false, dryRun);
+        // check if account has any balances
+        // retrieve the balance, once-off at the latest block
+        const {
+          data: { free },
+        } = (await api.query.system.account(sourceAddress)).toJSON();
+        console.log(`free balance to claim: ${free}`);
+        if (free === 0) {
+          console.log(
+            notificationMessage(
+              `${sourceAddress} has no free balance to transfer.`
+            )
+          );
+          continue;
+        }
+        let tx = api.tx.balances.transferAll(destAddress, false);
+        txs.push(signAndSendTx(api, tx, sourceKeyPair, false, dryRun));
+      }
     }
-  }
+    console.log(
+      `claiming funds from ${txs.length} addresses in batch# ${batchNo} ...`
+    );
+    if (txs.length > 0) {
+      await Promise.all(txs);
+    }
+  };
+
+  await executeInBatch(batchInfo, batchAction, () => {});
 };
 
 const burnUnclaimedInBatch = async (wfConfig) => {
@@ -695,13 +714,12 @@ const burnUnclaimedInBatch = async (wfConfig) => {
 
   // load last minted batch from checkpoint
   let batchSize = parseInt(wfConfig?.instance?.batchSize) || 100;
-  let lastCheckpointedBatch = context.batch.lastBurnBatch;
   let ownerAddresses = addressColumn.records;
 
   let batchInfo = {
     startRecordNo,
     endRecordNo,
-    checkpointedBatchNo: lastCheckpointedBatch,
+    checkpointedBatchNo: 0,
     batchSize,
   };
 
