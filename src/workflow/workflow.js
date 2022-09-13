@@ -763,7 +763,7 @@ const enableDryRun = async () => {
 };
 
 const verifyWorkflow = async (wfConfig) => {
-  const initialFund = wfConfig?.instance?.initialFund;
+  let initialFund = wfConfig?.instance?.initialFund;
 
   const context = getContext();
   const { api } = context.network;
@@ -772,6 +772,23 @@ const verifyWorkflow = async (wfConfig) => {
   // validate initial fund
   if (initialFund) {
     const { existentialDeposit } = api.consts.balances;
+    const initialFundPattern = new RegExp('[1-9][0-9]*');
+
+    if(!initialFund.match(initialFundPattern)) {
+      const { calcInitialFund } = (await inqAsk([
+        {
+          type: 'confirm',
+          name: 'calcInitialFund',
+          message: `Would you like to calculate and set initialFund?`,
+          default: false,
+        },
+      ])) || { calcInitialFund: false };
+
+      if (calcInitialFund) {
+        wfConfig.instance.initialFund = existentialDeposit * 2; // TODO add tx fee value instead of * 2
+      }
+    }
+
     if (existentialDeposit.gt(new BN(initialFund))) {
       throw new WorkflowError(
         `instance.initialFund should be bigger than existential deposit (${existentialDeposit.toNumber()})`
