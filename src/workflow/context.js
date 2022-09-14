@@ -25,7 +25,7 @@ const columnTitles = {
   instanceId: 'instanceId',
   classMetadata: 'classMetadata',
   classStartInstanceId: 'classStartInstanceId',
-  instanceMetadata: 'instanceMetadat',
+  instanceMetadata: 'instanceMetadata',
   secret: 'gift account secret',
   address: 'gift account address',
   imageCid: 'image cid',

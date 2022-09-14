@@ -30,6 +30,8 @@ const {
   notificationMessage,
 } = require('../utils/styles');
 
+const initialFundPattern = new RegExp('[1-9][0-9]*');
+
 const executeInBatch = async (batchInfo, action, callback) => {
   let { startRecordNo, endRecordNo, checkpointedBatchNo, batchSize } =
     batchInfo;
@@ -288,7 +290,7 @@ const mintInstancesInBatch = async (wfConfig) => {
     batchNo
   ) => {
     if (!dryRun) {
-      // set checkpiont for instanceIds
+      // set checkpoint for instanceIds
       context.data.checkpoint();
 
       // set checkpoint for mint batch
@@ -548,20 +550,55 @@ const setInstanceMetadata = async (wfConfig) => {
 };
 
 const sendInitialFunds = async (wfConfig) => {
-  // 7-fund accounts with some initial funds
-  const amount = wfConfig?.instance?.initialFund;
-
-  // if no initialFund is set or initialFund is set to zero, skip this step.
-  if (!amount) {
-    console.log(
-      'no initialFunds was set in workflow. skipping sendInitialFunds!'
-    );
-    return;
-  }
+  // 7 - fund accounts with some initial funds
+  let initialFund = wfConfig?.instance?.initialFund;
 
   const context = getContext();
-  const { startRecordNo, endRecordNo } = context.data;
   const { dryRun } = context;
+  const { startRecordNo, endRecordNo } = context.data;
+  const { api, signingPair } = context.network;
+
+  if (!initialFund.match(initialFundPattern)) {
+    const { calcInitialFund } = (await inqAsk([
+      {
+        type: 'confirm',
+        name: 'calcInitialFund',
+        message: `Would you like to calculate and set initialFund?`,
+        default: false,
+      },
+    ])) || { calcInitialFund: false };
+
+    if (calcInitialFund) {
+      // TODO remove console logs in this block
+      const { id: collectionId, startInstanceId: itemId } = context.class;
+      const [destinationAddressColumn] = context.data.getColumns([
+        columnTitles.address,
+      ]);
+      const destinationAddress = destinationAddressColumn.records[0];
+      const { existentialDeposit } = api.consts.balances;
+
+      console.log(
+        'collectionId, itemId, destinationAddress',
+        collectionId,
+        itemId,
+        destinationAddress
+      );
+
+      const info = await api.tx.uniques
+        .transfer(collectionId, itemId || 0, destinationAddress)
+        .paymentInfo(signingPair.address);
+
+      console.log('info', info);
+
+      const fee = info.partialFee.mul(13).div(10);
+      initialFund = existentialDeposit.add(fee);
+
+      console.log(initialFund.toString());
+    } else {
+      // user refused to set the initialFund, skip this step
+      return;
+    }
+  }
 
   let [addressColumn] = context.data.getColumns([columnTitles.address]);
   if (
@@ -590,7 +627,7 @@ const sendInitialFunds = async (wfConfig) => {
     await transferFunds(
       context.network,
       ownerAddresses.slice(batchStartRecordNo, batchEndRecordNo),
-      amount,
+      initialFund,
       dryRun
     );
   };
@@ -769,25 +806,9 @@ const verifyWorkflow = async (wfConfig) => {
   const { api } = context.network;
   const { startRecordNo, endRecordNo } = context.data;
 
-  // validate initial fund
-  if (initialFund) {
+  // validate initial fund if user set it manually
+  if (initialFund && initialFund.match(initialFundPattern)) {
     const { existentialDeposit } = api.consts.balances;
-    const initialFundPattern = new RegExp('[1-9][0-9]*');
-
-    if(!initialFund.match(initialFundPattern)) {
-      const { calcInitialFund } = (await inqAsk([
-        {
-          type: 'confirm',
-          name: 'calcInitialFund',
-          message: `Would you like to calculate and set initialFund?`,
-          default: false,
-        },
-      ])) || { calcInitialFund: false };
-
-      if (calcInitialFund) {
-        wfConfig.instance.initialFund = existentialDeposit * 2; // TODO add tx fee value instead of * 2
-      }
-    }
 
     if (existentialDeposit.gt(new BN(initialFund))) {
       throw new WorkflowError(
