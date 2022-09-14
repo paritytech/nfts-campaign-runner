@@ -569,7 +569,6 @@ const sendInitialFunds = async (wfConfig) => {
     ])) || { calcInitialFund: false };
 
     if (calcInitialFund) {
-      // TODO remove console logs in this block
       const { id: collectionId, startInstanceId: itemId } = context.class;
       const [destinationAddressColumn] = context.data.getColumns([
         columnTitles.address,
