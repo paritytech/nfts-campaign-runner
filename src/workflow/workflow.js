@@ -577,23 +577,12 @@ const sendInitialFunds = async (wfConfig) => {
       const destinationAddress = destinationAddressColumn.records[0];
       const { existentialDeposit } = api.consts.balances;
 
-      console.log(
-        'collectionId, itemId, destinationAddress',
-        collectionId,
-        itemId,
-        destinationAddress
-      );
-
       const info = await api.tx.uniques
         .transfer(collectionId, itemId || 0, destinationAddress)
         .paymentInfo(signingPair.address);
 
-      console.log('info', info);
-
-      const fee = info.partialFee.mul(13).div(10);
+      const fee = info.partialFee.mul(new BN(13)).div(new BN(10));
       initialFund = existentialDeposit.add(fee);
-
-      console.log(initialFund.toString());
     } else {
       // user refused to set the initialFund, skip this step
       return;
