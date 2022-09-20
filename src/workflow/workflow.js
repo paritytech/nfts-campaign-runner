@@ -558,30 +558,41 @@ const sendInitialFunds = async (wfConfig) => {
   const { startRecordNo, endRecordNo } = context.data;
   const { api, signingPair } = context.network;
 
-  if (!initialFund?.match(initialFundPattern)) {
+  // calculate minimum initial fund
+  const { id: collectionId, startInstanceId: itemId } = context.class;
+  const [destinationAddressColumn] = context.data.getColumns([
+    columnTitles.address,
+  ]);
+  const destinationAddress = destinationAddressColumn.records[0];
+  const { existentialDeposit } = api.consts.balances;
+
+  const info = await api.tx.uniques
+    .transfer(collectionId, itemId || 0, destinationAddress)
+    .paymentInfo(signingPair.address);
+
+  const fee = info.partialFee.mul(new BN(13)).div(new BN(10));
+
+  // set the min initial fund equal to existentialDeposit + fee.
+  // The fee is needed to cover the tx fee for transferring the NFT from temp gift account to the final account
+  minInitialFund = existentialDeposit.add(fee);
+
+  // check the value of  the configured initialFund is valid and above the minimum needed funds to claim
+  if (
+    !initialFund?.match(initialFundPattern) ||
+    minInitialFund.lte(new BN(initialFund))
+  ) {
+    let message = `Each gift account needs to have a minimum balance of ${minInitialFund.toString()} to cover the claim fee.\nYou have not configured any initialFunds or the configured value is below minimum required amount.\nWould you like to calculate and set the initialFund to ${minInitialFund.toString()}?.`;
     const { calcInitialFund } = (await inqAsk([
       {
         type: 'confirm',
         name: 'calcInitialFund',
-        message: `Would you like to calculate and set initialFund?`,
+        message,
         default: true,
       },
     ])) || { calcInitialFund: false };
 
     if (calcInitialFund) {
-      const { id: collectionId, startInstanceId: itemId } = context.class;
-      const [destinationAddressColumn] = context.data.getColumns([
-        columnTitles.address,
-      ]);
-      const destinationAddress = destinationAddressColumn.records[0];
-      const { existentialDeposit } = api.consts.balances;
-
-      const info = await api.tx.uniques
-        .transfer(collectionId, itemId || 0, destinationAddress)
-        .paymentInfo(signingPair.address);
-
-      const fee = info.partialFee.mul(new BN(13)).div(new BN(10));
-      initialFund = existentialDeposit.add(fee);
+      initialFund = minInitialFund;
     } else {
       // user refused to set the initialFund, skip this step
       return;
