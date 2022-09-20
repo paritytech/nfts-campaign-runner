@@ -558,13 +558,13 @@ const sendInitialFunds = async (wfConfig) => {
   const { startRecordNo, endRecordNo } = context.data;
   const { api, signingPair } = context.network;
 
-  if (!initialFund.match(initialFundPattern)) {
+  if (!initialFund?.match(initialFundPattern)) {
     const { calcInitialFund } = (await inqAsk([
       {
         type: 'confirm',
         name: 'calcInitialFund',
         message: `Would you like to calculate and set initialFund?`,
-        default: false,
+        default: true,
       },
     ])) || { calcInitialFund: false };
 
