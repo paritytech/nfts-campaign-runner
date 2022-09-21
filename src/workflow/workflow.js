@@ -569,11 +569,11 @@ const sendInitialFunds = async (wfConfig) => {
     .transfer(collectionId, itemId || 0, destinationAddress)
     .paymentInfo(signingPair.address);
 
-  const fee = info.partialFee.mul(new BN(13)).div(new BN(10));
+  const fee = info.partialFee.muln(13).divn(10);
 
   // set the min initial fund equal to existentialDeposit + fees.
   // The fee is needed to cover the tx fee for transferring the NFT from temp gift account to the final account
-  minInitialFund = existentialDeposit.add(fee.muln(2));
+  const minInitialFund = existentialDeposit.add(fee.muln(2));
 
   // check the value of  the configured initialFund is valid and above the minimum needed funds to claim
   if (
