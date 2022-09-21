@@ -30,6 +30,8 @@ const {
   notificationMessage,
 } = require('../utils/styles');
 
+const initialFundPattern = new RegExp('[1-9][0-9]*');
+
 const executeInBatch = async (batchInfo, action, callback) => {
   let { startRecordNo, endRecordNo, checkpointedBatchNo, batchSize } =
     batchInfo;
@@ -288,7 +290,7 @@ const mintInstancesInBatch = async (wfConfig) => {
     batchNo
   ) => {
     if (!dryRun) {
-      // set checkpiont for instanceIds
+      // set checkpoint for instanceIds
       context.data.checkpoint();
 
       // set checkpoint for mint batch
@@ -548,20 +550,54 @@ const setInstanceMetadata = async (wfConfig) => {
 };
 
 const sendInitialFunds = async (wfConfig) => {
-  // 7-fund accounts with some initial funds
-  const amount = wfConfig?.instance?.initialFund;
-
-  // if no initialFund is set or initialFund is set to zero, skip this step.
-  if (!amount) {
-    console.log(
-      'no initialFunds was set in workflow. skipping sendInitialFunds!'
-    );
-    return;
-  }
+  // 7 - fund accounts with some initial funds
+  let initialFund = wfConfig?.instance?.initialFund;
 
   const context = getContext();
-  const { startRecordNo, endRecordNo } = context.data;
   const { dryRun } = context;
+  const { startRecordNo, endRecordNo } = context.data;
+  const { api, signingPair } = context.network;
+
+  // calculate minimum initial fund
+  const { id: collectionId, startInstanceId: itemId } = context.class;
+  const [destinationAddressColumn] = context.data.getColumns([
+    columnTitles.address,
+  ]);
+  const destinationAddress = destinationAddressColumn.records[0];
+  const { existentialDeposit } = api.consts.balances;
+
+  const info = await api.tx.uniques
+    .transfer(collectionId, itemId || 0, destinationAddress)
+    .paymentInfo(signingPair.address);
+
+  const fee = info.partialFee.mul(new BN(13)).div(new BN(10));
+
+  // set the min initial fund equal to existentialDeposit + fee.
+  // The fee is needed to cover the tx fee for transferring the NFT from temp gift account to the final account
+  minInitialFund = existentialDeposit.add(fee);
+
+  // check the value of  the configured initialFund is valid and above the minimum needed funds to claim
+  if (
+    !initialFund?.match(initialFundPattern) ||
+    minInitialFund.lte(new BN(initialFund))
+  ) {
+    let message = `Each gift account needs to have a minimum balance of ${minInitialFund.toString()} to cover the claim fee.\nYou have not configured any initialFunds or the configured value is below minimum required amount.\nWould you like to calculate and set the initialFund to ${minInitialFund.toString()}?.`;
+    const { calcInitialFund } = (await inqAsk([
+      {
+        type: 'confirm',
+        name: 'calcInitialFund',
+        message,
+        default: true,
+      },
+    ])) || { calcInitialFund: false };
+
+    if (calcInitialFund) {
+      initialFund = minInitialFund;
+    } else {
+      // user refused to set the initialFund, skip this step
+      return;
+    }
+  }
 
   let [addressColumn] = context.data.getColumns([columnTitles.address]);
   if (
@@ -590,7 +626,7 @@ const sendInitialFunds = async (wfConfig) => {
     await transferFunds(
       context.network,
       ownerAddresses.slice(batchStartRecordNo, batchEndRecordNo),
-      amount,
+      initialFund,
       dryRun
     );
   };
@@ -763,15 +799,16 @@ const enableDryRun = async () => {
 };
 
 const verifyWorkflow = async (wfConfig) => {
-  const initialFund = wfConfig?.instance?.initialFund;
+  let initialFund = wfConfig?.instance?.initialFund;
 
   const context = getContext();
   const { api } = context.network;
   const { startRecordNo, endRecordNo } = context.data;
 
-  // validate initial fund
-  if (initialFund) {
+  // validate initial fund if user set it manually
+  if (initialFund && initialFund.match(initialFundPattern)) {
     const { existentialDeposit } = api.consts.balances;
+
     if (existentialDeposit.gt(new BN(initialFund))) {
       throw new WorkflowError(
         `instance.initialFund should be bigger than existential deposit (${existentialDeposit.toNumber()})`
