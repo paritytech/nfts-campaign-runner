@@ -27,7 +27,6 @@
       "name": "VIP NFT for <<first name>>",
       "description": "Thanks <<first name>> <<last name>> for being such an incredible member"
     },
-    "batchSize": "100",
-    "initialFund": "<some initial fund to deposit to the gift account to cover the NFT transfer fees. Must be more than Existensial deposit of the network.>"
+    "batchSize": "100"
   }
 }

@@ -20,7 +20,6 @@
     "data": {
       "csvFile": "~/simple.csv"
     },
-    "batchSize": "100",
-    "initialFund": "<some initial fund to deposit to the gift account to cover the NFT transfer fees. Must be more than Existensial deposit of the network.>"
+    "batchSize": "100"
   }
 }

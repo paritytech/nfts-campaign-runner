@@ -49,8 +49,6 @@ To define a workflow you need to provide the cli with a workflow `.json` file wh
       "offset": "<the row offset, if not specified it starts from row 0>",
       "count": "<the number of rows to be used after offset, if not specified it will count up to the last row.>"
     },
-    "initialFund": "<initial starting balance (in chain decimal) for the created gift accounts to be used to pay the tx fees when the NFTs are claimed.
-    It should be above the Existential Deposit(ED) of the chain to keep the account alive!>",
     "batchSize": "<the number of transactions that are being sent in a batch. default to 100 if not specified>",
     "metadata": {
       "imageFile": "<the full path to the media file that contains the NFT image file>",
