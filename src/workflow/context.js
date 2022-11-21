@@ -79,9 +79,9 @@ const context = {
       }
     }
 
-    this.class.load(wfConfig);
-    this.batch.load(wfConfig);
-    this.data.load(wfConfig);
+    await this.class.load(wfConfig, this.network);
+    await this.batch.load(wfConfig, this.network);
+    await this.data.load(wfConfig, this.network);
 
     this.isLoaded = true;
   },
@@ -94,8 +94,9 @@ const context = {
   class: {
     id: undefined,
     startInstanceId: undefined,
+    isExistingClass: false,
     metaCid: undefined,
-    load: function (wfConfig) {
+    load: async function (wfConfig, network) {
       let { header, records } = getCheckpointRecords(cpfiles.class) || {};
       if (header) {
         let [classIdIdx, classMetaIdx, startInstanceIdx] = getColumnIndex(
@@ -114,6 +115,46 @@ const context = {
         }
         if (records[0]?.[startInstanceIdx]) {
           this.startInstanceId = records[0][startInstanceIdx];
+        }
+      }
+      // check if class exists and if the user wants to mint in an existing class.
+      // if a valid class is not already created or does not exist, create the class
+      if (this.id === undefined || wfConfig.class?.id !== this.id) {
+        // check the specified class does not exist
+        let cfgClassId = wfConfig.class.id;
+        let { api } = network;
+        let uniquesClass = (await api.query.uniques.class(cfgClassId))
+          ?.unwrapOr(undefined)
+          ?.toJSON();
+
+        if (uniquesClass) {
+          // class already exists ask user if they want to mint in the same class
+          const answer = (await inqAsk([
+            {
+              type: 'confirm',
+              name: 'appendToClass',
+              message: `A class with classId:${cfgClassId} already exists, do you want to create the instances in the same class?`,
+              default: false,
+            },
+          ])) || { appendToClass: false };
+          if (!answer?.appendToClass) {
+            throw new WorkflowError(
+              'Please set a different class id in your workflow.json settings.'
+            );
+          } else {
+            this.id = cfgClassId;
+            this.startInstanceId = Number(uniquesClass?.items);
+            this.isExistingClass = true;
+            // set the start instance id to the last id available in the class assuming all instances are minted from 0 to number of current instances.
+            console.log(
+              notificationMessage(
+                `The class ${cfgClassId} exists. The new items will be added to the class staring from index ${context.class.startInstanceId}.`
+              )
+            );
+          }
+        } else {
+          // create a new class
+          context.class.id = cfgClassId;
         }
       }
     },
@@ -168,7 +209,7 @@ const context = {
         this.records[r].push('');
       }
     },
-    load: function (wfConfig) {
+    load: async function (wfConfig) {
       let datafile = wfConfig?.instance?.data?.csvFile;
       if (!datafile) {
         throw new WorkflowError(
@@ -215,7 +256,7 @@ const context = {
     lastMetaCidBatch: 0,
     lastMetadataBatch: 0,
     lastBalanceTxBatch: 0,
-    load: function (wfConfig) {
+    load: async function (wfConfig) {
       let { header, records } = getCheckpointRecords(cpfiles.batch) || {};
       if (header) {
         let [

@@ -74,62 +74,27 @@ const executeInBatch = async (batchInfo, action, callback) => {
 };
 
 const createClass = async (wfConfig) => {
-  // 1- create class
+  // 1- create class if do not exists
   const context = getContext();
   const { api, signingPair, proxiedAddress } = context.network;
   const { dryRun } = context;
 
-  // if a valid class is not already created or does not exist, create the class
-  if (
-    context.class.id === undefined ||
-    wfConfig.class?.id !== context.class.id
-  ) {
-    // check the specified class does not exist
-    let cfgClassId = wfConfig.class.id;
-    let uniquesClass = (await api.query.uniques.class(cfgClassId))
-      ?.unwrapOr(undefined)
-      ?.toJSON();
-
-    if (uniquesClass) {
-      // class already exists ask user if they want to mint in the same class
-      const answer = (await inqAsk([
-        {
-          type: 'confirm',
-          name: 'appendToClass',
-          message: `A class with classId:${cfgClassId} already exists, do you want to create the instances in the same class?`,
-          default: false,
-        },
-      ])) || { appendToClass: false };
-      if (!answer?.appendToClass) {
-        throw new WorkflowError(
-          'Please set a different class id in your workflow.json settings.'
-        );
-      } else {
-        context.class.id = cfgClassId;
-        context.class.startInstanceId = Number(uniquesClass?.items);
-        // set the start instance id to the last id available in the class assuming all instances are minted from 0 to number of current instances.
-        console.log(
-          notificationMessage(
-            `The class ${cfgClassId} exists. The new items will be added to the class staring from index ${context.class.startInstanceId}.`
-          )
-        );
-      }
-    } else {
-      // create a new class
-      context.class.id = cfgClassId;
-      let tx = api.tx.uniques.create(context.class.id, signingPair?.address);
-      let call = proxiedAddress
-        ? api.tx.proxy.proxy(proxiedAddress, 'Assets', tx)
-        : tx;
-      await signAndSendTx(api, call, signingPair, true, dryRun);
-    }
-    // set the class checkpoint
-    if (!dryRun) context.class.checkpoint();
-  } else {
-    console.log(
-      notificationMessage('Class information loaded from the checkpoint file')
+  if (context.class.id === undefined) {
+    throw new WorkflowError(
+      'No class.id checkpoint is recorded or the checkpoint is not in correct state'
     );
   }
+
+  if (!context.class.isExistingClass) {
+    // create the new class
+    let tx = api.tx.uniques.create(context.class.id, signingPair?.address);
+    let call = proxiedAddress
+      ? api.tx.proxy.proxy(proxiedAddress, 'Assets', tx)
+      : tx;
+    await signAndSendTx(api, call, signingPair, true, dryRun);
+  }
+  // set the class checkpoint
+  if (!dryRun) context.class.checkpoint();
 };
 
 const setCollectionMetadata = async (wfConfig) => {
@@ -863,6 +828,8 @@ const verifyWorkflow = async (wfConfig) => {
   }
 };
 
+const calculateCost = async (wfConfig) => {};
+
 const runWorkflow = async (configFile = './src/workflow.json', dryRunMode) => {
   if (dryRunMode) console.log(importantMessage('\ndry-run mode is on'));
 
@@ -880,6 +847,10 @@ const runWorkflow = async (configFile = './src/workflow.json', dryRunMode) => {
 
   // 0- run various checks
   await verifyWorkflow(config);
+
+  // calculate the workflow cost
+
+  // check the minting account has enough funds to mint the workflow.
 
   if (dryRunMode) {
     // TODO: uncomment once we find a true way to detect that method on rpc nodes
