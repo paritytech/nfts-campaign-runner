@@ -31,6 +31,7 @@ const {
 } = require('../utils/styles');
 
 const initialFundPattern = new RegExp('[1-9][0-9]*');
+const METADATA_SIZE = 46;
 
 const executeInBatch = async (batchInfo, action, callback) => {
   let { startRecordNo, endRecordNo, checkpointedBatchNo, batchSize } =
@@ -524,21 +525,7 @@ const sendInitialFunds = async (wfConfig) => {
   const { api, signingPair } = context.network;
 
   // calculate minimum initial fund
-  const { id: collectionId, startInstanceId: itemId } = context.class;
-  const [destinationAddressColumn] = context.data.getColumns([
-    columnTitles.address,
-  ]);
-  const destinationAddress = destinationAddressColumn.records[0];
-  const { existentialDeposit } = api.consts.balances;
-  const info = await api.tx.uniques
-    .transfer(collectionId, itemId || 0, destinationAddress)
-    .paymentInfo(signingPair.address);
-
-  const fee = info.partialFee.muln(13).divn(10);
-
-  // set the min initial fund equal to existentialDeposit + fees.
-  // The fee is needed to cover the tx fee for transferring the NFT from temp gift account to the final account
-  const minInitialFund = existentialDeposit.add(fee.muln(2));
+  const minInitialFund = await calcMinInitialFund();
 
   // check the value of  the configured initialFund is valid and above the minimum needed funds to claim
   if (
@@ -828,7 +815,70 @@ const verifyWorkflow = async (wfConfig) => {
   }
 };
 
-const calculateCost = async (wfConfig) => {};
+const calcMinInitialFund = async () => {
+  const context = getContext();
+  const { api, signingPair } = context.network;
+
+  // calculate minimum initial fund
+  const { id: collectionId, startInstanceId: itemId } = context.class;
+  const [destinationAddressColumn] = context.data.getColumns([
+    columnTitles.address,
+  ]);
+  const destinationAddress = destinationAddressColumn.records[0];
+  const { existentialDeposit } = api.consts.balances;
+  const info = await api.tx.uniques
+    .transfer(collectionId, itemId || 0, destinationAddress)
+    .paymentInfo(signingPair.address);
+
+  const fee = info.partialFee.muln(13).divn(10);
+
+  // set the min initial fund equal to existentialDeposit + fees.
+  // The fee is needed to cover the tx fee for transferring the NFT from temp gift account to the final account
+  const minInitialFund = existentialDeposit.add(fee.muln(2));
+  return minInitialFund;
+};
+
+const calculateCost = async (wfConfig) => {
+  const context = getContext();
+  const { api } = context.network;
+
+  let metadataDepositBase = api.consts.uniques.metadataDepositBase;
+  let depositPerByte = api.consts.uniques.depositPerByte;
+  let metadataDeposit = metadataDepositBase.add(
+    depositPerByte.muln(METADATA_SIZE)
+  );
+  let collectionDeposit = api.consts.uniques.collectionDeposit;
+  let itemDeposit = api.consts.uniques.itemDeposit;
+  let metadataCount = 0;
+  let itemCount = 0;
+  let collectionCount = 0;
+  itemCount = context.data.endRecordNo - context.data.startRecordNo;
+
+  if (context.class.isExistingClass) {
+    collectionCount = 1;
+  }
+  if (wfConfig['class']['metadata']) {
+    metadataCount += 1;
+  }
+  if (wfConfig['instance']['metadata']) {
+    metadataCount +=
+      itemCount - context.batch.lastMetadataBatch * wfConfig.instance.batchSize;
+  }
+
+  let minInitialFund = await calcMinInitialFund();
+  let totalCollectionDeposit = collectionDeposit.muln(collectionCount);
+  let totalInitialFunds = minInitialFund.muln(
+    itemCount - context.batch.lastBalanceTxBatch * wfConfig.instance.batchSize
+  );
+  let totalItemDeposit = itemDeposit.muln(itemCount);
+  let totalMetadataDeposit = metadataDeposit.muln(metadataCount);
+  return {
+    totalInitialFunds,
+    totalCollectionDeposit,
+    totalMetadataDeposit,
+    totalItemDeposit,
+  };
+};
 
 const runWorkflow = async (configFile = './src/workflow.json', dryRunMode) => {
   if (dryRunMode) console.log(importantMessage('\ndry-run mode is on'));
@@ -844,12 +894,39 @@ const runWorkflow = async (configFile = './src/workflow.json', dryRunMode) => {
   await checkPreviousCheckpoints();
   await loadContext(config);
   let context = getContext();
+  let { api, signingPair } = context.network;
 
   // 0- run various checks
   await verifyWorkflow(config);
 
   // calculate the workflow cost
-
+  let {
+    totalInitialFunds,
+    totalCollectionDeposit,
+    totalItemDeposit,
+    totalMetadataDeposit,
+  } = await calculateCost(config);
+  console.log(
+    totalInitialFunds,
+    totalCollectionDeposit,
+    totalItemDeposit,
+    totalMetadataDeposit
+  );
+  let totalCost = totalInitialFunds
+    .add(totalCollectionDeposit)
+    .add(totalItemDeposit)
+    .add(totalMetadataDeposit);
+  console.info(`total cost of minting the workflow is : ${totalCost}`);
+  let adminAddress = signingPair.address;
+  let { data: balance } = await api.query.system.account(adminAddress);
+  let usableBalance = balance.free.gte(balance.miscFrozen)
+    ? balance.free.sub(balance.miscFrozen)
+    : new BN(0);
+  if (totalCost.gt(usableBalance)) {
+    console.log(`the account that is used for minting does not have enough funds to cover the cost of running the workflow.
+    Account Balance:${usableBalance}\n
+    Total Cost:${totalCost}`);
+  }
   // check the minting account has enough funds to mint the workflow.
 
   if (dryRunMode) {
@@ -857,7 +934,7 @@ const runWorkflow = async (configFile = './src/workflow.json', dryRunMode) => {
     // await enableDryRun();
 
     // temporary code
-    console.log(importantMessage('\ndry-run check successfully finished'));
+    console.info(importantMessage('\ndry-run check successfully finished'));
     context.clean();
     return;
   }
