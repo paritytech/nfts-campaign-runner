@@ -962,7 +962,7 @@ const runWorkflow = async (configFile = './src/workflow.json', dryRunMode) => {
       )
     );
 
-    let message = `Would you like to continue the workflow withoug enough funds?`;
+    let message = `Would you like to continue the workflow without enough funds?`;
     const { continueWithoutFunds } = (await inqAsk([
       {
         type: 'confirm',
