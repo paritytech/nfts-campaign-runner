@@ -23,7 +23,7 @@ const inqAsk = inquirer.createPromptModule();
 const { parseConfig } = require('./wfConfig');
 const { WorkflowError } = require('../Errors');
 const { fillTemplateFromData } = require('../utils/csv');
-const { isNumber, isEmptyObject } = require('../utils');
+const { isNumber, isEmptyObject, formatBalanceWithUnit } = require('../utils');
 const {
   importantMessage,
   stepTitle,
@@ -93,6 +93,8 @@ const createClass = async (wfConfig) => {
       ? api.tx.proxy.proxy(proxiedAddress, 'Assets', tx)
       : tx;
     await signAndSendTx(api, call, signingPair, true, dryRun);
+  } else {
+    console.info('The class already exists.');
   }
   // set the class checkpoint
   if (!dryRun) context.class.checkpoint();
@@ -521,9 +523,9 @@ const sendInitialFunds = async (wfConfig) => {
 
   const context = getContext();
   const { dryRun } = context;
+  const { chainInfo } = context.network;
   const { startRecordNo, endRecordNo } = context.data;
   const { api, signingPair } = context.network;
-
   // calculate minimum initial fund
   const minInitialFund = await calcMinInitialFund();
 
@@ -532,7 +534,15 @@ const sendInitialFunds = async (wfConfig) => {
     !initialFund?.match(initialFundPattern) ||
     minInitialFund.lte(new BN(initialFund))
   ) {
-    let message = `Each gift account needs to have a minimum balance of ${minInitialFund.toString()} to cover the claim fee.\nYou have not configured any initialFunds or the configured value is below minimum required amount.\nWould you like to calculate and set the initialFund to ${minInitialFund.toString()}?.`;
+    let minInitialFundStr = formatBalanceWithUnit(minInitialFund, chainInfo);
+    console.info(
+      notificationMessage(
+        `Each gift account needs to have a minimum balance of ${minInitialFundStr} to cover the claim fee. \
+        \nYou have not configured any initialFunds or the configured value is below minimum required amount.
+        `
+      )
+    );
+    let message = `Would you like to set the initialFund to ${minInitialFundStr}?.`;
     const { calcInitialFund } = (await inqAsk([
       {
         type: 'confirm',
@@ -819,17 +829,14 @@ const calcMinInitialFund = async () => {
   const context = getContext();
   const { api, signingPair } = context.network;
 
+  let collectionId = 1;
+  let itemId = 1;
   // calculate minimum initial fund
-  const { id: collectionId, startInstanceId: itemId } = context.class;
-  const [destinationAddressColumn] = context.data.getColumns([
-    columnTitles.address,
-  ]);
-  const destinationAddress = destinationAddressColumn.records[0];
+  const destinationAddress = '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY';
   const { existentialDeposit } = api.consts.balances;
   const info = await api.tx.uniques
     .transfer(collectionId, itemId || 0, destinationAddress)
     .paymentInfo(signingPair.address);
-
   const fee = info.partialFee.muln(13).divn(10);
 
   // set the min initial fund equal to existentialDeposit + fees.
@@ -894,7 +901,7 @@ const runWorkflow = async (configFile = './src/workflow.json', dryRunMode) => {
   await checkPreviousCheckpoints();
   await loadContext(config);
   let context = getContext();
-  let { api, signingPair } = context.network;
+  let { api, signingPair, chainInfo } = context.network;
 
   // 0- run various checks
   await verifyWorkflow(config);
@@ -906,29 +913,71 @@ const runWorkflow = async (configFile = './src/workflow.json', dryRunMode) => {
     totalItemDeposit,
     totalMetadataDeposit,
   } = await calculateCost(config);
-  console.log(
-    totalInitialFunds,
-    totalCollectionDeposit,
-    totalItemDeposit,
-    totalMetadataDeposit
-  );
+
   let totalCost = totalInitialFunds
     .add(totalCollectionDeposit)
     .add(totalItemDeposit)
     .add(totalMetadataDeposit);
-  console.info(`total cost of minting the workflow is : ${totalCost}`);
+
+  let initalFundsStr = formatBalanceWithUnit(totalInitialFunds, chainInfo);
+  let collectionDepositStr = formatBalanceWithUnit(
+    totalCollectionDeposit,
+    chainInfo
+  );
+  let itemsDepositStr = formatBalanceWithUnit(totalItemDeposit, chainInfo);
+  let metadataDepositStr = formatBalanceWithUnit(
+    totalMetadataDeposit,
+    chainInfo
+  );
+  let totalCostStr = formatBalanceWithUnit(totalCost, chainInfo);
+
+  // check the minting account has enough funds to mint the workflow.
   let adminAddress = signingPair.address;
   let { data: balance } = await api.query.system.account(adminAddress);
   let usableBalance = balance.free.gte(balance.miscFrozen)
     ? balance.free.sub(balance.miscFrozen)
     : new BN(0);
-  if (totalCost.gt(usableBalance)) {
-    console.log(`the account that is used for minting does not have enough funds to cover the cost of running the workflow.
-    Account Balance:${usableBalance}\n
-    Total Cost:${totalCost}`);
-  }
-  // check the minting account has enough funds to mint the workflow.
+  let usableBalanceStr = formatBalanceWithUnit(usableBalance, chainInfo);
 
+  console.info(
+    `\
+    \nThe cost of running the remaining workflow is : \
+    \ncollection deposit: ${collectionDepositStr} \
+    \nitems deposit: ${itemsDepositStr} \
+    \nmetadata deposit: ${metadataDepositStr} \
+    \ninitial funds: ${initalFundsStr} \
+    \n----------------------------- \
+    \ntotal cost: ${totalCostStr} \
+    \nAccount Balance: ${usableBalanceStr} \
+    \n \
+    `
+  );
+
+  if (totalCost.gt(usableBalance)) {
+    console.info(
+      notificationMessage(
+        `The account does not have enough funds to cover the cost of running the workflow.\
+        \nThe workflow might stop at any step once your available balance is consumed.
+        `
+      )
+    );
+
+    let message = `Would you like to continue the workflow withoug enough funds?`;
+    const { continueWithoutFunds } = (await inqAsk([
+      {
+        type: 'confirm',
+        name: 'continueWithoutFunds',
+        message,
+        default: false,
+      },
+    ])) || { continueWithoutFunds: false };
+
+    if (!continueWithoutFunds) {
+      return;
+    }
+  }
+
+  await sendInitialFunds(config);
   if (dryRunMode) {
     // TODO: uncomment once we find a true way to detect that method on rpc nodes
     // await enableDryRun();

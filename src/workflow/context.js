@@ -25,6 +25,7 @@ const columnTitles = {
   instanceId: 'instanceId',
   classMetadata: 'classMetadata',
   classStartInstanceId: 'classStartInstanceId',
+  isExistingClass: 'isExistingClass',
   instanceMetadata: 'instanceMetadata',
   secret: 'gift account secret',
   address: 'gift account address',
@@ -65,7 +66,13 @@ const removeCheckpoints = () => {
 const context = {
   isLoaded: false,
   load: async function (wfConfig) {
-    this.network = await connect(wfConfig?.network);
+    let network = await connect(wfConfig?.network);
+    let chainInfo = {
+      decimals: network.api.registry?.chainDecimals[0],
+      token: network.api.registry.chainTokens[0],
+      ssf8: network.api.registry.chainSS58,
+    };
+    this.network = { ...network, chainInfo };
     this.pinataClient = createPinataClient(wfConfig?.pinata);
 
     // Create checkpoint path if it does not exist
@@ -99,14 +106,13 @@ const context = {
     load: async function (wfConfig, network) {
       let { header, records } = getCheckpointRecords(cpfiles.class) || {};
       if (header) {
-        let [classIdIdx, classMetaIdx, startInstanceIdx] = getColumnIndex(
-          header,
-          [
+        let [classIdIdx, classMetaIdx, startInstanceIdx, isExistingClassIdx] =
+          getColumnIndex(header, [
             columnTitles.classId,
             columnTitles.classMetadata,
             columnTitles.classStartInstanceId,
-          ]
-        );
+            columnTitles.isExistingClass,
+          ]);
         if (records[0]?.[classIdIdx]) {
           this.id = records[0][classIdIdx];
         }
@@ -115,6 +121,9 @@ const context = {
         }
         if (records[0]?.[startInstanceIdx]) {
           this.startInstanceId = records[0][startInstanceIdx];
+        }
+        if (records[0]?.[isExistingClassIdx]) {
+          this.isExistingClass = records[0][isExistingClassIdx];
         }
       }
       // check if class exists and if the user wants to mint in an existing class.
@@ -165,8 +174,9 @@ const context = {
           columnTitles.classId,
           columnTitles.classMetadata,
           columnTitles.classStartInstanceId,
+          columnTitles.isExistingClass,
         ],
-        [[this.id, this.metaCid, this.startInstanceId]]
+        [[this.id, this.metaCid, this.startInstanceId, this.isExistingClass]]
       );
     },
   },
