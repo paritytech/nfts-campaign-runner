@@ -75,7 +75,7 @@ const executeInBatch = async (batchInfo, action, callback) => {
 };
 
 const createClass = async (wfConfig) => {
-  // 1- create class if do not exists
+  // 1- create class if does not exist.
   const context = getContext();
   const { api, signingPair, proxiedAddress } = context.network;
   const { dryRun } = context;
@@ -86,15 +86,15 @@ const createClass = async (wfConfig) => {
     );
   }
 
-  if (!context.class.isExistingClass) {
+  if (context.class.isExistingClass) {
+    console.info('The class already exists.');
+  } else {
     // create the new class
     let tx = api.tx.uniques.create(context.class.id, signingPair?.address);
     let call = proxiedAddress
       ? api.tx.proxy.proxy(proxiedAddress, 'Assets', tx)
       : tx;
     await signAndSendTx(api, call, signingPair, true, dryRun);
-  } else {
-    console.info('The class already exists.');
   }
   // set the class checkpoint
   if (!dryRun) context.class.checkpoint();
@@ -977,7 +977,6 @@ const runWorkflow = async (configFile = './src/workflow.json', dryRunMode) => {
     }
   }
 
-  await sendInitialFunds(config);
   if (dryRunMode) {
     // TODO: uncomment once we find a true way to detect that method on rpc nodes
     // await enableDryRun();
