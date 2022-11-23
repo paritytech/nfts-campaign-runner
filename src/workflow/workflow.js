@@ -32,7 +32,9 @@ const {
 
 const initialFundPattern = new RegExp('[1-9][0-9]*');
 const METADATA_SIZE = 46;
-const FEE_ADJUSTMENT_MULTIPLIER = 130; // fee=1.3*partialFee
+
+// The adjustment to estimate the actual fee as fee=(FEE_ADJUSTMENT_MULTIPLIER/100)*partialFee
+const FEE_ADJUSTMENT_MULTIPLIER = 130;
 
 const executeInBatch = async (batchInfo, action, callback) => {
   let { startRecordNo, endRecordNo, checkpointedBatchNo, batchSize } =
