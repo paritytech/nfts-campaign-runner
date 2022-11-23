@@ -32,6 +32,7 @@ const {
 
 const initialFundPattern = new RegExp('[1-9][0-9]*');
 const METADATA_SIZE = 46;
+const FEE_ADJUSTMENT_MULTIPLIER = 130; // fee=1.3*partialFee
 
 const executeInBatch = async (batchInfo, action, callback) => {
   let { startRecordNo, endRecordNo, checkpointedBatchNo, batchSize } =
@@ -832,12 +833,14 @@ const calcMinInitialFund = async () => {
   let collectionId = 1;
   let itemId = 1;
   // calculate minimum initial fund
-  const destinationAddress = '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY';
+  const destinationAddress = '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY'; // Alice's address
   const { existentialDeposit } = api.consts.balances;
   const info = await api.tx.uniques
     .transfer(collectionId, itemId || 0, destinationAddress)
     .paymentInfo(signingPair.address);
-  const fee = info.partialFee.muln(13).divn(10);
+  // The actual fee will be more than the estimated partial fee after adding the actual weights.
+  // to estimate the actual fee we consider fee=1.3*partialFee
+  const fee = info.partialFee.muln(FEE_ADJUSTMENT_MULTIPLIER).divn(100);
 
   // set the min initial fund equal to existentialDeposit + fees.
   // The fee is needed to cover the tx fee for transferring the NFT from temp gift account to the final account
