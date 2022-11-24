@@ -540,7 +540,8 @@ const sendInitialFunds = async (wfConfig) => {
     let minInitialFundStr = formatBalanceWithUnit(minInitialFund, chainInfo);
     console.info(
       notificationMessage(
-        `Each gift account needs to have a minimum balance of ${minInitialFundStr} to cover the claim fee. \
+        `\
+        \nEach gift account needs to have a minimum balance of ${minInitialFundStr} to cover the claim fee. \
         \nYou have not configured any initialFunds or the configured value is below minimum required amount.
         `
       )
@@ -866,7 +867,8 @@ const calculateCost = async (wfConfig) => {
   let collectionCount = 0;
   itemCount = context.data.endRecordNo - context.data.startRecordNo;
 
-  if (context.class.isExistingClass) {
+  if (!context.class.isExistingClass) {
+    // a new collection must be created.
     collectionCount = 1;
   }
   if (wfConfig['class']['metadata']) {
@@ -981,6 +983,9 @@ const runWorkflow = async (configFile = './src/workflow.json', dryRunMode) => {
       return;
     }
   }
+
+  await sendInitialFunds(config);
+  return;
 
   if (dryRunMode) {
     // TODO: uncomment once we find a true way to detect that method on rpc nodes
