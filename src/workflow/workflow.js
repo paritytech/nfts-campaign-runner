@@ -23,7 +23,7 @@ const inqAsk = inquirer.createPromptModule();
 const { parseConfig } = require('./wfConfig');
 const { WorkflowError } = require('../Errors');
 const { fillTemplateFromData } = require('../utils/csv');
-const { isNumber, isEmptyObject } = require('../utils');
+const { isNumber, isEmptyObject, formatBalanceWithUnit } = require('../utils');
 const {
   importantMessage,
   stepTitle,
@@ -31,6 +31,10 @@ const {
 } = require('../utils/styles');
 
 const initialFundPattern = new RegExp('[1-9][0-9]*');
+const METADATA_SIZE = 46;
+
+// The adjustment to estimate the actual fee as fee=(FEE_ADJUSTMENT_MULTIPLIER/100)*partialFee
+const FEE_ADJUSTMENT_MULTIPLIER = 130;
 
 const executeInBatch = async (batchInfo, action, callback) => {
   let { startRecordNo, endRecordNo, checkpointedBatchNo, batchSize } =
@@ -74,62 +78,29 @@ const executeInBatch = async (batchInfo, action, callback) => {
 };
 
 const createClass = async (wfConfig) => {
-  // 1- create class
+  // 1- create class if does not exist.
   const context = getContext();
   const { api, signingPair, proxiedAddress } = context.network;
   const { dryRun } = context;
 
-  // if a valid class is not already created or does not exist, create the class
-  if (
-    context.class.id === undefined ||
-    wfConfig.class?.id !== context.class.id
-  ) {
-    // check the specified class does not exist
-    let cfgClassId = wfConfig.class.id;
-    let uniquesClass = (await api.query.uniques.class(cfgClassId))
-      ?.unwrapOr(undefined)
-      ?.toJSON();
-
-    if (uniquesClass) {
-      // class already exists ask user if they want to mint in the same class
-      const answer = (await inqAsk([
-        {
-          type: 'confirm',
-          name: 'appendToClass',
-          message: `A class with classId:${cfgClassId} already exists, do you want to create the instances in the same class?`,
-          default: false,
-        },
-      ])) || { appendToClass: false };
-      if (!answer?.appendToClass) {
-        throw new WorkflowError(
-          'Please set a different class id in your workflow.json settings.'
-        );
-      } else {
-        context.class.id = cfgClassId;
-        context.class.startInstanceId = Number(uniquesClass?.items);
-        // set the start instance id to the last id available in the class assuming all instances are minted from 0 to number of current instances.
-        console.log(
-          notificationMessage(
-            `The class ${cfgClassId} exists. The new items will be added to the class staring from index ${context.class.startInstanceId}.`
-          )
-        );
-      }
-    } else {
-      // create a new class
-      context.class.id = cfgClassId;
-      let tx = api.tx.uniques.create(context.class.id, signingPair?.address);
-      let call = proxiedAddress
-        ? api.tx.proxy.proxy(proxiedAddress, 'Assets', tx)
-        : tx;
-      await signAndSendTx(api, call, signingPair, true, dryRun);
-    }
-    // set the class checkpoint
-    if (!dryRun) context.class.checkpoint();
-  } else {
-    console.log(
-      notificationMessage('Class information loaded from the checkpoint file')
+  if (context.class.id === undefined) {
+    throw new WorkflowError(
+      'No class.id checkpoint is recorded or the checkpoint is not in correct state'
     );
   }
+
+  if (context.class.isExistingClass) {
+    console.info('The class already exists.');
+  } else {
+    // create the new class
+    let tx = api.tx.uniques.create(context.class.id, signingPair?.address);
+    let call = proxiedAddress
+      ? api.tx.proxy.proxy(proxiedAddress, 'Assets', tx)
+      : tx;
+    await signAndSendTx(api, call, signingPair, true, dryRun);
+  }
+  // set the class checkpoint
+  if (!dryRun) context.class.checkpoint();
 };
 
 const setCollectionMetadata = async (wfConfig) => {
@@ -555,32 +526,27 @@ const sendInitialFunds = async (wfConfig) => {
 
   const context = getContext();
   const { dryRun } = context;
+  const { chainInfo } = context.network;
   const { startRecordNo, endRecordNo } = context.data;
   const { api, signingPair } = context.network;
-
   // calculate minimum initial fund
-  const { id: collectionId, startInstanceId: itemId } = context.class;
-  const [destinationAddressColumn] = context.data.getColumns([
-    columnTitles.address,
-  ]);
-  const destinationAddress = destinationAddressColumn.records[0];
-  const { existentialDeposit } = api.consts.balances;
-  const info = await api.tx.uniques
-    .transfer(collectionId, itemId || 0, destinationAddress)
-    .paymentInfo(signingPair.address);
-
-  const fee = info.partialFee.muln(13).divn(10);
-
-  // set the min initial fund equal to existentialDeposit + fees.
-  // The fee is needed to cover the tx fee for transferring the NFT from temp gift account to the final account
-  const minInitialFund = existentialDeposit.add(fee.muln(2));
+  const minInitialFund = await calcMinInitialFund();
 
   // check the value of  the configured initialFund is valid and above the minimum needed funds to claim
   if (
     !initialFund?.match(initialFundPattern) ||
     minInitialFund.lte(new BN(initialFund))
   ) {
-    let message = `Each gift account needs to have a minimum balance of ${minInitialFund.toString()} to cover the claim fee.\nYou have not configured any initialFunds or the configured value is below minimum required amount.\nWould you like to calculate and set the initialFund to ${minInitialFund.toString()}?.`;
+    let minInitialFundStr = formatBalanceWithUnit(minInitialFund, chainInfo);
+    console.info(
+      notificationMessage(
+        `\
+        \nEach gift account needs to have a minimum balance of ${minInitialFundStr} to cover the claim fee. \
+        \nYou have not configured any initialFunds or the configured value is below minimum required amount.
+        `
+      )
+    );
+    let message = `Would you like to set the initialFund to ${minInitialFundStr}?.`;
     const { calcInitialFund } = (await inqAsk([
       {
         type: 'confirm',
@@ -863,6 +829,71 @@ const verifyWorkflow = async (wfConfig) => {
   }
 };
 
+const calcMinInitialFund = async () => {
+  const context = getContext();
+  const { api, signingPair } = context.network;
+
+  let collectionId = 1;
+  let itemId = 1;
+  // calculate minimum initial fund
+  const destinationAddress = '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY'; // Alice's address
+  const { existentialDeposit } = api.consts.balances;
+  const info = await api.tx.uniques
+    .transfer(collectionId, itemId || 0, destinationAddress)
+    .paymentInfo(signingPair.address);
+  // The actual fee will be more than the estimated partial fee after adding the actual weights.
+  // to estimate the actual fee we consider fee=1.3*partialFee
+  const fee = info.partialFee.muln(FEE_ADJUSTMENT_MULTIPLIER).divn(100);
+
+  // set the min initial fund equal to existentialDeposit + fees.
+  // The fee is needed to cover the tx fee for transferring the NFT from temp gift account to the final account
+  const minInitialFund = existentialDeposit.add(fee.muln(2));
+  return minInitialFund;
+};
+
+const calculateCost = async (wfConfig) => {
+  const context = getContext();
+  const { api } = context.network;
+
+  let metadataDepositBase = api.consts.uniques.metadataDepositBase;
+  let depositPerByte = api.consts.uniques.depositPerByte;
+  let metadataDeposit = metadataDepositBase.add(
+    depositPerByte.muln(METADATA_SIZE)
+  );
+  let collectionDeposit = api.consts.uniques.collectionDeposit;
+  let itemDeposit = api.consts.uniques.itemDeposit;
+  let metadataCount = 0;
+  let itemCount = 0;
+  let collectionCount = 0;
+  itemCount = context.data.endRecordNo - context.data.startRecordNo;
+
+  if (!context.class.isExistingClass) {
+    // a new collection must be created.
+    collectionCount = 1;
+  }
+  if (wfConfig['class']['metadata']) {
+    metadataCount += 1;
+  }
+  if (wfConfig['instance']['metadata']) {
+    metadataCount +=
+      itemCount - context.batch.lastMetadataBatch * wfConfig.instance.batchSize;
+  }
+
+  let minInitialFund = await calcMinInitialFund();
+  let totalCollectionDeposit = collectionDeposit.muln(collectionCount);
+  let totalInitialFunds = minInitialFund.muln(
+    itemCount - context.batch.lastBalanceTxBatch * wfConfig.instance.batchSize
+  );
+  let totalItemDeposit = itemDeposit.muln(itemCount);
+  let totalMetadataDeposit = metadataDeposit.muln(metadataCount);
+  return {
+    totalInitialFunds,
+    totalCollectionDeposit,
+    totalMetadataDeposit,
+    totalItemDeposit,
+  };
+};
+
 const runWorkflow = async (configFile = './src/workflow.json', dryRunMode) => {
   if (dryRunMode) console.log(importantMessage('\ndry-run mode is on'));
 
@@ -877,16 +908,91 @@ const runWorkflow = async (configFile = './src/workflow.json', dryRunMode) => {
   await checkPreviousCheckpoints();
   await loadContext(config);
   let context = getContext();
+  let { api, signingPair, chainInfo } = context.network;
 
   // 0- run various checks
   await verifyWorkflow(config);
+
+  // calculate the workflow cost
+  let {
+    totalInitialFunds,
+    totalCollectionDeposit,
+    totalItemDeposit,
+    totalMetadataDeposit,
+  } = await calculateCost(config);
+
+  let totalCost = totalInitialFunds
+    .add(totalCollectionDeposit)
+    .add(totalItemDeposit)
+    .add(totalMetadataDeposit);
+
+  let initalFundsStr = formatBalanceWithUnit(totalInitialFunds, chainInfo);
+  let collectionDepositStr = formatBalanceWithUnit(
+    totalCollectionDeposit,
+    chainInfo
+  );
+  let itemsDepositStr = formatBalanceWithUnit(totalItemDeposit, chainInfo);
+  let metadataDepositStr = formatBalanceWithUnit(
+    totalMetadataDeposit,
+    chainInfo
+  );
+  let totalCostStr = formatBalanceWithUnit(totalCost, chainInfo);
+
+  // check the minting account has enough funds to mint the workflow.
+  let adminAddress = signingPair.address;
+  let { data: balance } = await api.query.system.account(adminAddress);
+  let usableBalance = balance.free.gte(balance.miscFrozen)
+    ? balance.free.sub(balance.miscFrozen)
+    : new BN(0);
+  let usableBalanceStr = formatBalanceWithUnit(usableBalance, chainInfo);
+
+  console.info(
+    `\
+    \nThe cost of running the remaining workflow is : \
+    \ncollection deposit: ${collectionDepositStr} \
+    \nitems deposit: ${itemsDepositStr} \
+    \nmetadata deposit: ${metadataDepositStr} \
+    \ninitial funds: ${initalFundsStr} \
+    \n----------------------------- \
+    \ntotal cost: ${totalCostStr} \
+    \nAccount Balance: ${usableBalanceStr} \
+    \n \
+    `
+  );
+
+  if (totalCost.gt(usableBalance)) {
+    console.info(
+      notificationMessage(
+        `The account does not have enough funds to cover the cost of running the workflow.\
+        \nThe workflow might stop at any step once your available balance is consumed.
+        `
+      )
+    );
+
+    let message = `Would you like to continue the workflow without enough funds?`;
+    const { continueWithoutFunds } = (await inqAsk([
+      {
+        type: 'confirm',
+        name: 'continueWithoutFunds',
+        message,
+        default: false,
+      },
+    ])) || { continueWithoutFunds: false };
+
+    if (!continueWithoutFunds) {
+      return;
+    }
+  }
+
+  await sendInitialFunds(config);
+  return;
 
   if (dryRunMode) {
     // TODO: uncomment once we find a true way to detect that method on rpc nodes
     // await enableDryRun();
 
     // temporary code
-    console.log(importantMessage('\ndry-run check successfully finished'));
+    console.info(importantMessage('\ndry-run check successfully finished'));
     context.clean();
     return;
   }
