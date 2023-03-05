@@ -9,7 +9,7 @@ To install the tool, clone this repo:
 
 ```bash
 # Clone the repository
-> git clone https://github.com/hamidra/uniques-campaign-runner.git
+> git clone https://github.com/paritytech/uniques-campaign-runner.git
 > cd uniques-campaign-runner
 ```
 
