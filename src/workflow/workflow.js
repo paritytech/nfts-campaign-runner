@@ -984,9 +984,6 @@ const runWorkflow = async (configFile = './src/workflow.json', dryRunMode) => {
     }
   }
 
-  await sendInitialFunds(config);
-  return;
-
   if (dryRunMode) {
     // TODO: uncomment once we find a true way to detect that method on rpc nodes
     // await enableDryRun();
