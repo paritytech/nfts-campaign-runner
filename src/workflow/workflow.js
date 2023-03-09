@@ -1003,8 +1003,10 @@ const runWorkflow = async (configFile = './src/workflow.json', dryRunMode) => {
   await setCollectionMetadata(config);
 
   // 3- generate secrets
+  /*
   console.info(stepTitle`\n\nGenerating gift secrets ...`);
   await generateGiftSecrets(config);
+  */
 
   //4- mint instances in batch
   console.info(stepTitle`\n\nMinting nft instances ...`);
