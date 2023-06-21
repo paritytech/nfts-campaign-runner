@@ -941,8 +941,8 @@ const runWorkflow = async (configFile = './src/workflow.json', dryRunMode) => {
   // check the minting account has enough funds to mint the workflow.
   let adminAddress = signingPair.address;
   let { data: balance } = await api.query.system.account(adminAddress);
-  let usableBalance = balance.free.gte(balance.miscFrozen)
-    ? balance.free.sub(balance.miscFrozen)
+  let usableBalance = balance.free.gte(balance.frozen)
+    ? balance.free.sub(balance.frozen)
     : new BN(0);
   let usableBalanceStr = formatBalanceWithUnit(usableBalance, chainInfo);
 
