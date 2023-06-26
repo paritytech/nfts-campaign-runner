@@ -1,5 +1,11 @@
 const pinataSDK = require('@pinata/sdk');
 const { cache } = require('../utils/cache');
+const Bottleneck = require('bottleneck/es5');
+
+const limiter = new Bottleneck({
+  maxConcurrent: 1,
+  minTime: 333,
+});
 
 const client = {
   pinata: undefined,
@@ -20,7 +26,11 @@ const client = {
           cidVersion: 0,
         },
       };
-      let pinResult = await this.pinata.pinFromFS(sourcePath, options);
+      const pinResult = await limiter.schedule(() =>
+        this.pinata.pinFromFS(sourcePath, options)
+      );
+
+      //let pinResult = await this.pinata.pinFromFS(sourcePath, options);
       cid = pinResult?.IpfsHash;
       cache.set(sourcePath, cid);
       console.log(`uploaded file ${sourcePath}, cid:${cid}.`);
