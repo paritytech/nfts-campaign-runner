@@ -35,7 +35,7 @@ To define a workflow you need to provide the cli with a workflow `.json` file wh
     "secretApiKey": "<PinataSecretApiKey>"
   },
   "collection": {
-    "id": "<collection Id that the NFTs will be minted into, remove the field to create a new collection>",
+    "id": "<leave an empty string to create a new collection or put the collection's id to continue minting into that collection>",
     "metadata": {
       "imageFile": "<Path to the image file that is used for collection metadata>",
       "videoFile": "<Path to the video file that is used for collection metadata>",
