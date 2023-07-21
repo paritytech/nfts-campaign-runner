@@ -12,7 +12,7 @@ let mintCollectionItems = async (
   let itemId = startItemId || 0;
   let txs = [];
   for (let i = 0; i < owners.length; i++) {
-    txs.push(api.tx.uniques.mint(collectionId, itemId, owners[i]));
+    txs.push(api.tx.nfts.mint(collectionId, itemId, owners[i], null));
     itemId += 1;
   }
 
@@ -28,14 +28,14 @@ let burnItems = async (network, collectionId, itemIds, dryRun) => {
 
   let txs = [];
   for (let itemId of itemIds) {
-    txs.push(api.tx.uniques.burn(collectionId, itemId, null));
+    txs.push(api.tx.nfts.burn(collectionId, itemId));
 
     const hasMetadata = (
-      await api.query.uniques.instanceMetadataOf(collectionId, itemId)
+      await api.query.nfts.itemMetadataOf(collectionId, itemId)
     ).isSome;
     // if item has metadata, clear its metadata
     if (hasMetadata) {
-      txs.push(api.tx.uniques.clearMetadata(collectionId, itemId));
+      txs.push(api.tx.nfts.clearMetadata(collectionId, itemId));
     }
   }
 

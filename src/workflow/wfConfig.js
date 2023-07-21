@@ -34,7 +34,9 @@ const parseConfig = (cfile) => {
 
     // collection
     validateSection(configJson, 'collection', configFile);
-    validateElement(configJson, 'collection.id', configFile);
+    if (configJson.collection.id === "") {
+      configJson.collection.id = undefined;
+    }
     if (configJson.collection.metadata?.imageFile) {
       validateFileExists(
         path.resolve(configJson.collection.metadata.imageFile),

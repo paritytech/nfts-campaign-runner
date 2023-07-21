@@ -9,7 +9,6 @@
     "secretApiKey": "<PinataSecretApiKey>"
   },
   "collection": {
-    "id": "<collectionId that the NFT items are being minted in>",
     "metadata": {
       "imageFile": "~/collection-image.png",
       "videoFile": "~/collection-video.mp4",

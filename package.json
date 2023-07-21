@@ -1,9 +1,9 @@
 {
-  "name": "uniques-campaign-runner",
+  "name": "nfts-campaign-runner",
   "version": "1.0.0",
-  "description": "A cli tool to automate running NFT campaign workflows on substrate-uniques-pallet in bulk",
+  "description": "A cli tool to automate running NFT campaign workflows on substrate-nfts-pallet in bulk",
   "main": "./src/index.js",
-  "repository": "https://github.com/hamidra/uniques-campaign-runner.git",
+  "repository": "https://github.com/paritytech/uniques-campaign-runner.git",
   "author": "hamidra <hamid.alipour@gmail.com>",
   "license": "Apache License 2.0",
   "bin": {
@@ -29,6 +29,7 @@
     "typescript": "^4.7.4"
   },
   "scripts": {
+    "uniqcamp": "./src/index.js",
     "test": "jest"
   }
 }

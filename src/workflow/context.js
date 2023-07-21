@@ -126,33 +126,33 @@ const context = {
           this.isExistingCollection = records[0][isExistingCollectionIdx];
         }
       }
-      // check if collection exists and if the user wants to mint in an existing collection.
-      // if a valid collection is not already created or does not exist, create the collection
-      if (this.id === undefined || wfConfig.collection?.id !== this.id) {
+      // check if collection exists and whether a user wants to mint into the existing collection.
+      // if a collection was not already created or does not exist, create the collection
+      if (wfConfig.collection?.id !== this.id) {
         // check the specified collection does not exist
-        let cfgCollectionId = wfConfig.collection.id;
-        let { api } = network;
-        let uniquesCollection = (await api.query.uniques.class(cfgCollectionId))
+        const cfgCollectionId = wfConfig.collection.id ?? this.id;
+        const { api } = network;
+        const storageCollection = (await api.query.nfts.collection(cfgCollectionId))
           ?.unwrapOr(undefined)
           ?.toJSON();
 
-        if (uniquesCollection) {
-          // collection already exists ask user if they want to mint in the same collection
+        if (storageCollection) {
+          // collection already exists ask user if they want to mint into the same collection
           const answer = (await inqAsk([
             {
               type: 'confirm',
               name: 'appendToCollection',
-              message: `A collection with collectionId:${cfgCollectionId} already exists, do you want to create the items in the same collection?`,
+              message: `A collection with id:${cfgCollectionId} already exists, do you want to mint the nfts into the same collection?`,
               default: false,
             },
           ])) || { appendToCollection: false };
           if (!answer?.appendToCollection) {
             throw new WorkflowError(
-              'Please set a different collection id in your workflow.json settings.'
+              'Please remove the collection id from your workflow.json settings or remove the `.checkpoint/.class.cp` file'
             );
           } else {
             this.id = cfgCollectionId;
-            this.startItemId = Number(uniquesCollection?.items);
+            this.startItemId = Number(storageCollection?.items);
             this.isExistingCollection = true;
             // set the start item id to the last id available in the collection assuming all items are minted from 0 to number of current items.
             console.log(
@@ -167,7 +167,9 @@ const context = {
         }
       }
     },
-    checkpoint: function () {
+    checkpoint: function (id) {
+      if (id !== undefined) this.id = id;
+
       writeCsvSync(
         cpfiles.collection,
         [
