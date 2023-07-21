@@ -32,85 +32,85 @@ const parseConfig = (cfile) => {
     validateElement(configJson, 'pinata.apiKey', configFile);
     validateElement(configJson, 'pinata.secretApiKey', configFile);
 
-    // class
-    validateSection(configJson, 'class', configFile);
-    validateElement(configJson, 'class.id', configFile);
-    if (configJson.class.metadata?.imageFile) {
+    // collection
+    validateSection(configJson, 'collection', configFile);
+    validateElement(configJson, 'collection.id', configFile);
+    if (configJson.collection.metadata?.imageFile) {
       validateFileExists(
-        path.resolve(configJson.class.metadata.imageFile),
-        'class.metadata.imageFile'
+        path.resolve(configJson.collection.metadata.imageFile),
+        'collection.metadata.imageFile'
       );
     }
-    if (configJson.class.metadata?.videoFile) {
+    if (configJson.collection.metadata?.videoFile) {
       validateFileExists(
-        path.resolve(configJson.class.metadata.videoFile),
-        'class.metadata.videoFile'
+        path.resolve(configJson.collection.metadata.videoFile),
+        'collection.metadata.videoFile'
       );
     }
 
-    // instance
-    validateSection(configJson, 'instance', configFile);
+    // item
+    validateSection(configJson, 'item', configFile);
 
-    // instance.data
-    validateSection(configJson, 'instance.data', configFile);
-    validateElement(configJson, 'instance.data.csvFile', configFile);
+    // item.data
+    validateSection(configJson, 'item.data', configFile);
+    validateElement(configJson, 'item.data.csvFile', configFile);
 
-    configJson.instance.data.csvFile = path.resolve(
-      configJson.instance.data.csvFile
+    configJson.item.data.csvFile = path.resolve(
+      configJson.item.data.csvFile
     );
 
     // set output path
-    let outDir = path.dirname(configJson.instance.data.csvFile);
-    let ext = path.extname(configJson.instance.data.csvFile);
-    let filename = path.basename(configJson.instance.data.csvFile, ext);
+    let outDir = path.dirname(configJson.item.data.csvFile);
+    let ext = path.extname(configJson.item.data.csvFile);
+    let filename = path.basename(configJson.item.data.csvFile, ext);
     filename += ext ? `.final${ext}` : `.final`;
     let outFilename = path.join(outDir, filename);
     let metaFolderName = 'metadata';
     let metaFolderPath = path.join(outDir, metaFolderName);
     configJson.metadataFolder = path.resolve(metaFolderPath);
-    configJson.instance.data.outputCsvFile = path.resolve(outFilename);
+    configJson.item.data.outputCsvFile = path.resolve(outFilename);
 
     validateFileExists(
-      configJson.instance.data.csvFile,
-      'instance.data.csvFile'
+      configJson.item.data.csvFile,
+      'item.data.csvFile'
     );
     validateFileAccess(outDir, 'write');
 
-    // instance.metadata
-    const instanceMetadata = configJson.instance.metadata;
-    if (!isEmptyObject(instanceMetadata)) {
-      if (instanceMetadata.imageFile) {
-        const parts = instanceMetadata.imageFile.split('/');
+    // item.metadata
+    const itemMetadata = configJson.item.metadata;
+    if (!isEmptyObject(itemMetadata)) {
+      if (itemMetadata.imageFile) {
+        const parts = itemMetadata.imageFile.split('/');
         const imageFileNameTemplate = parts.pop();
         const imageFolder = parts.join('/');
 
-        configJson.instance.metadata.imageFolder = path.resolve(imageFolder);
-        configJson.instance.metadata.imageFileNameTemplate =
+        configJson.item.metadata.imageFolder = path.resolve(imageFolder);
+        configJson.item.metadata.imageFileNameTemplate =
           imageFileNameTemplate;
 
         validateFileExists(
-          configJson.instance.metadata.imageFolder,
-          'instance.metadata.imageFile'
+          configJson.item.metadata.imageFolder,
+          'item.metadata.imageFile'
         );
       }
 
-      if (instanceMetadata.videoFile) {
-        const parts = instanceMetadata.videoFile.split('/');
+      if (itemMetadata.videoFile) {
+        const parts = itemMetadata.videoFile.split('/');
         const videoFileNameTemplate = parts.pop();
         const videoFolder = parts.join('/');
 
-        configJson.instance.metadata.videoFolder = path.resolve(videoFolder);
-        configJson.instance.metadata.videoFileNameTemplate =
+        configJson.item.metadata.videoFolder = path.resolve(videoFolder);
+        configJson.item.metadata.videoFileNameTemplate =
           videoFileNameTemplate;
 
         validateFileExists(
-          configJson.instance.metadata.videoFolder,
-          'instance.metadata.videoFile'
+          configJson.item.metadata.videoFolder,
+          'item.metadata.videoFile'
         );
       }
 
-      validateElement(configJson, 'instance.metadata.name', configFile);
-      validateElement(configJson, 'instance.metadata.description', configFile);
+      validateElement(configJson, 'item.metadata.name', configFile);
+      validateElement(configJson, 'item.metadata.description', configFile);
     }
   } catch (error) {
     return { error: error.message ?? error.toString() };

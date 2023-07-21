@@ -32,7 +32,7 @@ const generateMetadata = async (
     imagePath = path.resolve(imageFile);
     if (!fs.existsSync(imagePath)) {
       throw new WorkflowError(
-        `the configured class image path: ${imagePath} does not exist`
+        `the configured collection image path: ${imagePath} does not exist`
       );
     }
     if (!fs.statSync(imagePath)?.isFile()) {
@@ -95,7 +95,7 @@ const generateMetadata = async (
   // pin metadata
   let metaCid;
 
-  // Do NOT use cache for metadata, metadata per instance is unique.
+  // Do NOT use cache for metadata, metadata per item is unique.
   metaCid = await pinataClient.pinFile(metaPath, `${metaName}`);
 
   if (!metaCid) {
@@ -107,16 +107,16 @@ const generateMetadata = async (
 
 let setMetadataInBatch = async (
   connection,
-  classId,
-  instanceMetaCids,
+  collectionId,
+  itemMetaCids,
   dryRun
 ) => {
   const { api, signingPair, proxiedAddress } = await connection;
 
   let txs = [];
-  for (let i = 0; i < instanceMetaCids.length; i++) {
-    let { instanceId, metaCid } = instanceMetaCids[i];
-    txs.push(api.tx.uniques.setMetadata(classId, instanceId, metaCid, false));
+  for (let i = 0; i < itemMetaCids.length; i++) {
+    let { itemId, metaCid } = itemMetaCids[i];
+    txs.push(api.tx.uniques.setMetadata(collectionId, itemId, metaCid, false));
   }
 
   let txBatch = api.tx.utility.batchAll(txs);
@@ -128,12 +128,12 @@ let setMetadataInBatch = async (
 
 let setCollectionMetadata = async (
   connection,
-  classId,
+  collectionId,
   metadataCid,
   dryRun
 ) => {
   const { api, signingPair, proxiedAddress } = connection;
-  let tx = api.tx.uniques.setCollectionMetadata(classId, metadataCid, false);
+  let tx = api.tx.uniques.setCollectionMetadata(collectionId, metadataCid, false);
 
   let txCall = proxiedAddress
     ? api.tx.proxy.proxy(proxiedAddress, 'Assets', tx)
@@ -145,7 +145,7 @@ let setCollectionMetadata = async (
 const generateAndSetCollectionMetadata = async (
   connection,
   pinataClient,
-  classId,
+  collectionId,
   metadata,
   outputFile
 ) => {
@@ -159,7 +159,7 @@ const generateAndSetCollectionMetadata = async (
     outputFile
   );
 
-  await setCollectionMetadata(connection, classId, metaCid);
+  await setCollectionMetadata(connection, collectionId, metaCid);
 
   return metaCid;
 };

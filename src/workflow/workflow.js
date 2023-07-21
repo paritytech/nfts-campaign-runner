@@ -10,7 +10,7 @@ const {
   setMetadataInBatch,
 } = require('./metadata');
 const { generateSecret } = require('./giftSecrets');
-const { mintClassInstances, burnInstances } = require('./mint');
+const { mintCollectionItems, burnItems } = require('./mint');
 const { transferFunds } = require('./balanceTransfer');
 const {
   columnTitles,
@@ -77,77 +77,77 @@ const executeInBatch = async (batchInfo, action, callback) => {
   }
 };
 
-const createClass = async (wfConfig) => {
-  // 1- create class if does not exist.
+const createCollection = async (wfConfig) => {
+  // 1- create collection if does not exist.
   const context = getContext();
   const { api, signingPair, proxiedAddress } = context.network;
   const { dryRun } = context;
 
-  if (context.class.id === undefined) {
+  if (context.collection.id === undefined) {
     throw new WorkflowError(
-      'No class.id checkpoint is recorded or the checkpoint is not in correct state'
+      'No collection.id checkpoint is recorded or the checkpoint is not in correct state'
     );
   }
 
-  if (context.class.isExistingClass) {
-    console.info('The class already exists.');
+  if (context.collection.isExistingCollection) {
+    console.info('The collection already exists.');
   } else {
-    // create the new class
-    let tx = api.tx.uniques.create(context.class.id, signingPair?.address);
+    // create the new collection
+    let tx = api.tx.uniques.create(context.collection.id, signingPair?.address);
     let call = proxiedAddress
       ? api.tx.proxy.proxy(proxiedAddress, 'Assets', tx)
       : tx;
     await signAndSendTx(api, call, signingPair, true, dryRun);
   }
-  // set the class checkpoint
-  if (!dryRun) context.class.checkpoint();
+  // set the collection checkpoint
+  if (!dryRun) context.collection.checkpoint();
 };
 
 const setCollectionMetadata = async (wfConfig) => {
-  // 2-generate/set class metadata
+  // 2-generate/set collection metadata
   const context = getContext();
   const { dryRun } = context;
 
-  if (context.class.id === undefined) {
+  if (context.collection.id === undefined) {
     throw new WorkflowError(
-      'No class.id checkpoint is recorded or the checkpoint is not in correct state'
+      'No collection.id checkpoint is recorded or the checkpoint is not in correct state'
     );
   }
 
-  if (!context.class.metaCid) {
-    // no class metadata is recorded in the checkpoint
-    let metadata = wfConfig?.class?.metadata;
+  if (!context.collection.metaCid) {
+    // no collection metadata is recorded in the checkpoint
+    let metadata = wfConfig?.collection?.metadata;
     if (!metadata) {
-      // no class metadata is configured. ask user if they want to configure a class metadata
+      // no collection metadata is configured. ask user if they want to configure a collection metadata
       let { withoutMetadata } = (await inqAsk([
         {
           type: 'confirm',
           name: 'withoutMetadata',
-          message: `No class metadata is configured in workflow.json, do you want to continue without setting class metadata`,
+          message: `No collection metadata is configured in workflow.json, do you want to continue without setting collection metadata`,
           default: false,
         },
       ])) || { withoutMetadata: false };
       if (!withoutMetadata) {
         throw new WorkflowError(
-          'Please configure a class metadata in workflow.json.'
+          'Please configure a collection metadata in workflow.json.'
         );
       }
     } else {
       let metadataFolder = wfConfig.metadataFolder;
-      let metadataFile = path.join(metadataFolder, 'class.meta');
-      context.class.metaCid = await generateAndSetCollectionMetadata(
+      let metadataFile = path.join(metadataFolder, 'collection.meta');
+      context.collection.metaCid = await generateAndSetCollectionMetadata(
         context.network,
         context.pinataClient,
-        context.class.id,
+        context.collection.id,
         metadata,
         metadataFile
       );
-      // update class checkpoint
-      if (!dryRun) context.class.checkpoint();
+      // update collection checkpoint
+      if (!dryRun) context.collection.checkpoint();
     }
   } else {
     console.log(
-      notificationMessage('Re-using class metadata from the checkpoint')
+      notificationMessage('Re-using collection metadata from the checkpoint')
     );
   }
 };
@@ -157,7 +157,7 @@ const generateGiftSecrets = async (wfConfig) => {
   let context = getContext();
   const { dryRun } = context;
   let keyring = context.network.keyring;
-  // TODO: check if instanceOffset + instanceCount is out of bound (> data.length) throw an error
+  // TODO: check if itemOffset + itemCount is out of bound (> data.length) throw an error
   const [secretColumn, addressColumn] =
     context.data.getColumns([columnTitles.secret, columnTitles.address]) || [];
 
@@ -188,26 +188,26 @@ const generateGiftSecrets = async (wfConfig) => {
   console.log('Secrets generated');
 };
 
-const mintInstancesInBatch = async (wfConfig) => {
-  //4- mint instances in batch
+const mintItemsInBatch = async (wfConfig) => {
+  //4- mint items in batch
   const context = getContext();
   const { startRecordNo, endRecordNo } = context.data;
   const { dryRun } = context;
 
-  // read classId from checkpoint
-  if (context.class.id === undefined) {
+  // read collectionId from checkpoint
+  if (context.collection.id === undefined) {
     throw new WorkflowError(
-      'No classId checkpoint is recorded or the checkpoint is not in correct state'
+      'No collectionId checkpoint is recorded or the checkpoint is not in correct state'
     );
   }
 
-  let [addressColumn, instanceIdColumn] = context.data.getColumns([
+  let [addressColumn, itemIdColumn] = context.data.getColumns([
     columnTitles.address,
-    columnTitles.instanceId,
+    columnTitles.itemId,
   ]);
-  // add instanceId column if not exists
-  if (instanceIdColumn.records.length === 0) {
-    context.data.addColumn(columnTitles.instanceId);
+  // add itemId column if not exists
+  if (itemIdColumn.records.length === 0) {
+    context.data.addColumn(columnTitles.itemId);
   }
 
   // check Address column exists
@@ -220,13 +220,13 @@ const mintInstancesInBatch = async (wfConfig) => {
     );
   }
 
-  // if class already has instances, start from the first available id to mint new instances.
-  let startInstanceId = isNumber(context?.class?.startInstanceId)
-    ? parseInt(context?.class?.startInstanceId)
+  // if collection already has items, start from the first available id to mint new items.
+  let startItemId = isNumber(context?.collection?.startItemId)
+    ? parseInt(context?.collection?.startItemId)
     : 0;
 
   // load last minted batch from checkpoint
-  let batchSize = parseInt(wfConfig?.instance?.batchSize) || 100;
+  let batchSize = parseInt(wfConfig?.item?.batchSize) || 100;
   let lastCheckpointedBatch = context.batch.lastMintBatch;
 
   let batchInfo = {
@@ -237,22 +237,22 @@ const mintInstancesInBatch = async (wfConfig) => {
   };
 
   let batchAction = async (batchStartRecordNo, batchEndRecordNo, batchNo) => {
-    let batchStartInstanceId = startInstanceId + (batchNo - 1) * batchSize;
+    let batchStartItemId = startItemId + (batchNo - 1) * batchSize;
     let ownerAddresses = addressColumn.records;
-    await mintClassInstances(
+    await mintCollectionItems(
       context.network,
-      context.class.id,
-      batchStartInstanceId,
+      context.collection.id,
+      batchStartItemId,
       ownerAddresses.slice(batchStartRecordNo, batchEndRecordNo),
       dryRun
     );
 
-    let currentInstanceId = startInstanceId + (batchNo - 1) * batchSize;
+    let currentItemId = startItemId + (batchNo - 1) * batchSize;
     for (let i = batchStartRecordNo; i < batchEndRecordNo; i++) {
-      instanceIdColumn.records[i] = currentInstanceId;
-      currentInstanceId += 1;
+      itemIdColumn.records[i] = currentItemId;
+      currentItemId += 1;
     }
-    context.data.setColumns([instanceIdColumn]);
+    context.data.setColumns([itemIdColumn]);
   };
 
   let batchCheckpointCb = async (
@@ -261,7 +261,7 @@ const mintInstancesInBatch = async (wfConfig) => {
     batchNo
   ) => {
     if (!dryRun) {
-      // set checkpoint for instanceIds
+      // set checkpoint for itemIds
       context.data.checkpoint();
 
       // set checkpoint for mint batch
@@ -287,13 +287,13 @@ const pinAndSetImageCid = async (wfConfig) => {
   const { startRecordNo, endRecordNo } = context.data;
   const { dryRun } = context;
 
-  // set the metadata for instances in batch
-  let batchSize = parseInt(wfConfig?.instance?.batchSize) || 100;
+  // set the metadata for items in batch
+  let batchSize = parseInt(wfConfig?.item?.batchSize) || 100;
   let lastCheckpointedBatch = context.batch.lastMetaCidBatch || 0;
 
   const rowNumber = (zerobasedIdx) => zerobasedIdx + 2;
-  const instanceMetadata = wfConfig?.instance?.metadata;
-  if (isEmptyObject(instanceMetadata)) {
+  const itemMetadata = wfConfig?.item?.metadata;
+  if (isEmptyObject(itemMetadata)) {
     return;
   }
   const {
@@ -303,7 +303,7 @@ const pinAndSetImageCid = async (wfConfig) => {
     imageFileNameTemplate,
     videoFolder,
     videoFileNameTemplate,
-  } = instanceMetadata;
+  } = itemMetadata;
 
   const [imageCidColumn, metaCidColumn, videoCidColumn] =
     context.data.getColumns([
@@ -366,14 +366,14 @@ const pinAndSetImageCid = async (wfConfig) => {
       }
 
       // fill template name to build the name string
-      const instanceName = fillTemplateFromData(
+      const itemName = fillTemplateFromData(
         name,
         context.data.header,
         context.data.records[i]
       );
 
       // fill template description to build the description string
-      const instanceDescription = fillTemplateFromData(
+      const itemDescription = fillTemplateFromData(
         description,
         context.data.header,
         context.data.records[i]
@@ -384,8 +384,8 @@ const pinAndSetImageCid = async (wfConfig) => {
       let metaPath = path.join(metadataFolder, metadataName);
       const { metaCid, imageCid, videoCid } = await generateMetadata(
         context.pinataClient,
-        instanceName,
-        instanceDescription,
+        itemName,
+        itemDescription,
         imageFile,
         videoFile,
         metaPath
@@ -422,13 +422,13 @@ const pinAndSetImageCid = async (wfConfig) => {
   await executeInBatch(batchInfo, batchAction, batchCheckpointCb);
 };
 
-const setInstanceMetadata = async (wfConfig) => {
-  // 6- set metadata for instances
-  const instanceMetadata = wfConfig?.instance?.metadata;
-  if (isEmptyObject(instanceMetadata)) {
+const setItemMetadata = async (wfConfig) => {
+  // 6- set metadata for items
+  const itemMetadata = wfConfig?.item?.metadata;
+  if (isEmptyObject(itemMetadata)) {
     console.log(
       notificationMessage(
-        'Skipped! No instance metadata is configured for the workflow'
+        'Skipped! No item metadata is configured for the workflow'
       )
     );
     return;
@@ -438,19 +438,19 @@ const setInstanceMetadata = async (wfConfig) => {
   const { startRecordNo, endRecordNo } = context.data;
   const { dryRun } = context;
 
-  let batchSize = parseInt(wfConfig?.instance?.batchSize) || 100;
+  let batchSize = parseInt(wfConfig?.item?.batchSize) || 100;
   let lastCheckpointedBatch = context.batch.lastMetadataBatch || 0;
 
-  // read classId from checkpoint
-  if (context.class.id === undefined) {
+  // read collectionId from checkpoint
+  if (context.collection.id === undefined) {
     throw new WorkflowError(
-      'No classId checkpoint is recorded or the checkpoint is not in correct state'
+      'No collectionId checkpoint is recorded or the checkpoint is not in correct state'
     );
   }
 
-  const [metaCidColumn, instanceIdColumn] = context.data.getColumns([
+  const [metaCidColumn, itemIdColumn] = context.data.getColumns([
     columnTitles.metaCid,
-    columnTitles.instanceId,
+    columnTitles.itemId,
   ]);
 
   if (
@@ -463,11 +463,11 @@ const setInstanceMetadata = async (wfConfig) => {
   }
 
   if (
-    !isNumber(instanceIdColumn?.records?.[startRecordNo]) ||
-    !isNumber(instanceIdColumn?.records?.[endRecordNo - 1])
+    !isNumber(itemIdColumn?.records?.[startRecordNo]) ||
+    !isNumber(itemIdColumn?.records?.[endRecordNo - 1])
   ) {
     throw new WorkflowError(
-      'No instanceId is recorded or the checkpoint is not in a correct state.'
+      'No itemId is recorded or the checkpoint is not in a correct state.'
     );
   }
 
@@ -479,25 +479,25 @@ const setInstanceMetadata = async (wfConfig) => {
   };
 
   const batchAction = async (batchStartRecordNo, batchEndRecordNo, _) => {
-    let instanceMetadatas = [];
+    let itemMetadatas = [];
     // iterate the rows from startRecordNo to endRecordNo and collect recorded metadata info
     for (let i = batchStartRecordNo; i < batchEndRecordNo; i++) {
-      if (!isNumber(instanceIdColumn.records?.[i])) {
+      if (!isNumber(itemIdColumn.records?.[i])) {
         throw new WorkflowError(
-          `No instanceId is recorded for row#: ${i} or the checkpoint is not in a correct state.`
+          `No itemId is recorded for row#: ${i} or the checkpoint is not in a correct state.`
         );
       }
       const metadata = {
-        instanceId: instanceIdColumn.records[i],
+        itemId: itemIdColumn.records[i],
         metaCid: metaCidColumn.records[i],
       };
-      instanceMetadatas.push(metadata);
+      itemMetadatas.push(metadata);
     }
 
     await setMetadataInBatch(
       context.network,
-      context.class.id,
-      instanceMetadatas,
+      context.collection.id,
+      itemMetadatas,
       dryRun
     );
   };
@@ -522,7 +522,7 @@ const setInstanceMetadata = async (wfConfig) => {
 
 const sendInitialFunds = async (wfConfig) => {
   // 7 - fund accounts with some initial funds
-  let initialFund = wfConfig?.instance?.initialFund;
+  let initialFund = wfConfig?.item?.initialFund;
 
   const context = getContext();
   const { dryRun } = context;
@@ -575,7 +575,7 @@ const sendInitialFunds = async (wfConfig) => {
   }
 
   // load last balanceTx batch from checkpoint
-  let batchSize = parseInt(wfConfig?.instance?.batchSize) || 100;
+  let batchSize = parseInt(wfConfig?.item?.batchSize) || 100;
   let lastCheckpointedBatch = context.batch.lastBalanceTxBatch;
 
   let ownerAddresses = addressColumn.records;
@@ -630,7 +630,7 @@ const reapUnusedFunds = async (wfConfig) => {
     );
   }
   // load last minted batch from checkpoint
-  let batchSize = parseInt(wfConfig?.instance?.batchSize) || 100;
+  let batchSize = parseInt(wfConfig?.item?.batchSize) || 100;
 
   let batchInfo = {
     startRecordNo,
@@ -696,13 +696,13 @@ const burnUnclaimedInBatch = async (wfConfig) => {
 
   const { api } = context.network;
 
-  // read classId from checkpoint
-  if (context.class.id === undefined) {
+  // read collectionId from checkpoint
+  if (context.collection.id === undefined) {
     throw new WorkflowError(
-      'No classId is loaded in context. Either the classId is not specified in the workflow file or the checkpoint is not in correct state.'
+      'No collectionId is loaded in context. Either the collectionId is not specified in the workflow file or the checkpoint is not in correct state.'
     );
   }
-  let classId = context.class.id;
+  let collectionId = context.collection.id;
   let [addressColumn] = context.data.getColumns([columnTitles.address]);
   if (
     !addressColumn.records?.[startRecordNo] ||
@@ -714,7 +714,7 @@ const burnUnclaimedInBatch = async (wfConfig) => {
   }
 
   // load last minted batch from checkpoint
-  let batchSize = parseInt(wfConfig?.instance?.batchSize) || 100;
+  let batchSize = parseInt(wfConfig?.item?.batchSize) || 100;
   let ownerAddresses = addressColumn.records;
 
   let batchInfo = {
@@ -732,19 +732,19 @@ const burnUnclaimedInBatch = async (wfConfig) => {
 
     let unclaimed = await Promise.all(
       batchOwnerAddresses.map((addr) =>
-        api.query.uniques.account.keys(addr, classId)
+        api.query.uniques.account.keys(addr, collectionId)
       )
     );
-    let unclaimedInstances = [];
+    let unclaimedItems = [];
     for (let acountAssets of unclaimed) {
       acountAssets.forEach((key, i) => {
-        let [address, classId, instanceId] = key.args;
-        unclaimedInstances.push(instanceId);
+        let [address, collectionId, itemId] = key.args;
+        unclaimedItems.push(itemId);
       });
     }
 
-    if (unclaimedInstances && unclaimedInstances.length > 0) {
-      await burnInstances(context.network, classId, unclaimedInstances, dryRun);
+    if (unclaimedItems && unclaimedItems.length > 0) {
+      await burnItems(context.network, collectionId, unclaimedItems, dryRun);
     }
   };
 
@@ -764,7 +764,7 @@ const enableDryRun = async () => {
 };
 
 const verifyWorkflow = async (wfConfig) => {
-  let initialFund = wfConfig?.instance?.initialFund;
+  let initialFund = wfConfig?.item?.initialFund;
 
   const context = getContext();
   const { api } = context.network;
@@ -776,20 +776,20 @@ const verifyWorkflow = async (wfConfig) => {
 
     if (existentialDeposit.gt(new BN(initialFund))) {
       throw new WorkflowError(
-        `instance.initialFund should be bigger than existential deposit (${existentialDeposit.toNumber()})`
+        `item.initialFund should be bigger than existential deposit (${existentialDeposit.toNumber()})`
       );
     }
   }
 
   // check image files
-  const instanceMetadata = wfConfig?.instance?.metadata;
-  if (!isEmptyObject(instanceMetadata)) {
+  const itemMetadata = wfConfig?.item?.metadata;
+  if (!isEmptyObject(itemMetadata)) {
     const {
       imageFolder,
       imageFileNameTemplate,
       videoFolder,
       videoFileNameTemplate,
-    } = instanceMetadata;
+    } = itemMetadata;
 
     for (let i = startRecordNo; i < endRecordNo; i++) {
       if (!context.data.records[i]) continue;
@@ -867,22 +867,22 @@ const calculateCost = async (wfConfig) => {
   let collectionCount = 0;
   itemCount = context.data.endRecordNo - context.data.startRecordNo;
 
-  if (!context.class.isExistingClass) {
+  if (!context.collection.isExistingCollection) {
     // a new collection must be created.
     collectionCount = 1;
   }
-  if (wfConfig['class']['metadata']) {
+  if (wfConfig['collection']['metadata']) {
     metadataCount += 1;
   }
-  if (wfConfig['instance']['metadata']) {
+  if (wfConfig['item']['metadata']) {
     metadataCount +=
-      itemCount - context.batch.lastMetadataBatch * wfConfig.instance.batchSize;
+      itemCount - context.batch.lastMetadataBatch * wfConfig.item.batchSize;
   }
 
   let minInitialFund = await calcMinInitialFund();
   let totalCollectionDeposit = collectionDeposit.muln(collectionCount);
   let totalInitialFunds = minInitialFund.muln(
-    itemCount - context.batch.lastBalanceTxBatch * wfConfig.instance.batchSize
+    itemCount - context.batch.lastBalanceTxBatch * wfConfig.item.batchSize
   );
   let totalItemDeposit = itemDeposit.muln(itemCount);
   let totalMetadataDeposit = metadataDeposit.muln(metadataCount);
@@ -994,29 +994,29 @@ const runWorkflow = async (configFile = './src/workflow.json', dryRunMode) => {
     return;
   }
 
-  // 1- create class
-  console.info(stepTitle`\n\nCreating the uniques class ...`);
-  await createClass(config);
+  // 1- create collection
+  console.info(stepTitle`\n\nCreating the uniques collection ...`);
+  await createCollection(config);
 
-  // 2- set classMetadata
-  console.info(stepTitle`\n\nSetting class metadata ...`);
+  // 2- set collectionMetadata
+  console.info(stepTitle`\n\nSetting collection metadata ...`);
   await setCollectionMetadata(config);
 
   // 3- generate secrets
   console.info(stepTitle`\n\nGenerating gift secrets ...`);
   await generateGiftSecrets(config);
 
-  //4- mint instances in batch
-  console.info(stepTitle`\n\nMinting nft instances ...`);
-  await mintInstancesInBatch(config);
+  //4- mint items in batch
+  console.info(stepTitle`\n\nMinting nft items ...`);
+  await mintItemsInBatch(config);
 
   //5- pin images and generate metadata
   console.info(stepTitle`\n\nUploading and pinning the NFTs on IPFS ...`);
   await pinAndSetImageCid(config);
 
-  //6- set metadata for instances
-  console.info(stepTitle`\n\nSetting the instance metadata on chain ...`);
-  await setInstanceMetadata(config);
+  //6- set metadata for items
+  console.info(stepTitle`\n\nSetting the item metadata on chain ...`);
+  await setItemMetadata(config);
 
   //7-fund gift accounts with the initialFund amount.
   console.info(stepTitle`\n\nSeeding the accounts with initial funds ...`);
@@ -1024,7 +1024,7 @@ const runWorkflow = async (configFile = './src/workflow.json', dryRunMode) => {
 
   if (!dryRunMode) {
     // move the final data file to the output path, cleanup the checkpoint files.
-    let outFilename = config?.instance?.data?.outputCsvFile;
+    let outFilename = config?.item?.data?.outputCsvFile;
     context.data.writeFinalResult(outFilename);
     console.info(
       importantMessage(`\n\nThe final datafile is copied at \n ${outFilename}`)
@@ -1066,26 +1066,26 @@ const updateMetadata = async (
     return;
   }
 
-  // 1- skip create class
-  // since we just updating the metadata the class should already exists otherwise the update must fail
-  // load classId from config:
-  context.class.id = config.class.id;
+  // 1- skip create collection
+  // since we just updating the metadata the collection should already exists otherwise the update must fail
+  // load collectionId from config:
+  context.collection.id = config.collection.id;
 
-  // 2- set classMetadata
-  console.info(stepTitle`\n\nSetting class metadata ...`);
+  // 2- set collectionMetadata
+  console.info(stepTitle`\n\nSetting collection metadata ...`);
   await setCollectionMetadata(config);
 
   //3- pin images and generate metadata
   console.info(stepTitle`\n\nUploading and pinning the NFTs on IPFS ...`);
   await pinAndSetImageCid(config);
 
-  //4- set metadata for instances
-  console.info(stepTitle`\n\nSetting the instance metadata on chain ...`);
-  await setInstanceMetadata(config);
+  //4- set metadata for items
+  console.info(stepTitle`\n\nSetting the item metadata on chain ...`);
+  await setItemMetadata(config);
 
   if (!dryRunMode) {
     // move the final data file to the output path, cleanup the checkpoint files.
-    let outFilename = config?.instance?.data?.outputCsvFile;
+    let outFilename = config?.item?.data?.outputCsvFile;
     context.data.writeFinalResult(outFilename);
     console.info(
       importantMessage(`\n\nThe final datafile is copied at \n ${outFilename}`)
@@ -1146,13 +1146,13 @@ const burnAndReap = async (configFile = './src/workflow.json', dryRunMode) => {
     return;
   }
 
-  // 1- skip create class
-  // since we want to burn and reap accounts we assume the class in the workflow is already created otherwise it will throw error.
-  // load classId from config:
-  context.class.id = config.class.id;
+  // 1- skip create collection
+  // since we want to burn and reap accounts we assume the collection in the workflow is already created otherwise it will throw error.
+  // load collectionId from config:
+  context.collection.id = config.collection.id;
 
-  // 2- burn unclaimed instances
-  console.info(stepTitle`\n\nBurning unclaimed instances ...`);
+  // 2- burn unclaimed items
+  console.info(stepTitle`\n\nBurning unclaimed items ...`);
   await burnUnclaimedInBatch(config);
 
   //3- reap the unclimed secrets and return their fund to the signingAccount
@@ -1163,7 +1163,7 @@ const burnAndReap = async (configFile = './src/workflow.json', dryRunMode) => {
 
   if (!dryRunMode) {
     // move the final data file to the output path, cleanup the checkpoint files.
-    let outFilename = config?.instance?.data?.outputCsvFile;
+    let outFilename = config?.item?.data?.outputCsvFile;
     context.data.writeFinalResult(outFilename);
     console.info(
       importantMessage(`\n\nThe final datafile is copied at \n ${outFilename}`)

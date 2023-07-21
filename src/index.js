@@ -26,7 +26,7 @@ program
 program
   .command('update-metadata')
   .description(
-    'Set/Update metadata based on the specified information in the workflow. This command assumes the class and instances does exist on chain, otherwise throws an error.'
+    'Set/Update metadata based on the specified information in the workflow. This command assumes the collection and items does exist on chain, otherwise throws an error.'
   )
   .argument(`<workflow-config>`, 'the workflow configuration file')
   .option('--dry-run', 'Enable dry-run')

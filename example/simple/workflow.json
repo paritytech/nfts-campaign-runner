@@ -8,15 +8,15 @@
     "apiKey": "<pinata api id>",
     "secretApiKey": "<pinata secrey key>"
   },
-  "class": {
-    "id": "<specify the nft class Id>",
+  "collection": {
+    "id": "<specify the nft collection Id>",
     "metadata": {
       "imageFile": "~/nft.png",
       "name": "An example NFT campiagn",
       "description": "This is an example NFT campaign"
     }
   },
-  "instance": {
+  "item": {
     "data": {
       "csvFile": "~/simple.csv"
     },

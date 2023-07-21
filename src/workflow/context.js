@@ -21,12 +21,12 @@ const checkpointFolderPath = path.resolve(
   checkpointFolderName
 );
 const columnTitles = {
-  classId: 'classId',
-  instanceId: 'instanceId',
-  classMetadata: 'classMetadata',
-  classStartInstanceId: 'classStartInstanceId',
-  isExistingClass: 'isExistingClass',
-  instanceMetadata: 'instanceMetadata',
+  collectionId: 'collectionId',
+  itemId: 'itemId',
+  collectionMetadata: 'collectionMetadata',
+  collectionStartItemId: 'collectionStartItemId',
+  isExistingCollection: 'isExistingCollection',
+  itemMetadata: 'itemMetadata',
   secret: 'gift account secret',
   address: 'gift account address',
   imageCid: 'image cid',
@@ -39,7 +39,7 @@ const columnTitles = {
 };
 
 const cpfiles = {
-  class: path.resolve(checkpointFolderPath, `.class.cp`),
+  collection: path.resolve(checkpointFolderPath, `.collection.cp`),
   data: path.resolve(checkpointFolderPath, `.data.cp`),
   batch: path.resolve(checkpointFolderPath, `.batch.cp`),
 };
@@ -56,7 +56,7 @@ const removeCheckpoints = () => {
   try {
     if (fs.existsSync(cpfiles.batch)) fs.unlinkSync(cpfiles.batch);
     if (fs.existsSync(cpfiles.data)) fs.unlinkSync(cpfiles.data);
-    if (fs.existsSync(cpfiles.class)) fs.unlinkSync(cpfiles.class);
+    if (fs.existsSync(cpfiles.collection)) fs.unlinkSync(cpfiles.collection);
     if (fs.existsSync(checkpointFolderPath)) fs.rmdirSync(checkpointFolderPath);
   } catch (err) {
     console.error(err);
@@ -86,7 +86,7 @@ const context = {
       }
     }
 
-    await this.class.load(wfConfig, this.network);
+    await this.collection.load(wfConfig, this.network);
     await this.batch.load(wfConfig, this.network);
     await this.data.load(wfConfig, this.network);
 
@@ -98,85 +98,85 @@ const context = {
   network: undefined,
   dryRun: false,
   pinataClient: undefined,
-  class: {
+  collection: {
     id: undefined,
-    startInstanceId: undefined,
-    isExistingClass: false,
+    startItemId: undefined,
+    isExistingCollection: false,
     metaCid: undefined,
     load: async function (wfConfig, network) {
-      let { header, records } = getCheckpointRecords(cpfiles.class) || {};
+      let { header, records } = getCheckpointRecords(cpfiles.collection) || {};
       if (header) {
-        let [classIdIdx, classMetaIdx, startInstanceIdx, isExistingClassIdx] =
+        let [collectionIdIdx, collectionMetaIdx, startItemIdx, isExistingCollectionIdx] =
           getColumnIndex(header, [
-            columnTitles.classId,
-            columnTitles.classMetadata,
-            columnTitles.classStartInstanceId,
-            columnTitles.isExistingClass,
+            columnTitles.collectionId,
+            columnTitles.collectionMetadata,
+            columnTitles.collectionStartItemId,
+            columnTitles.isExistingCollection,
           ]);
-        if (records[0]?.[classIdIdx]) {
-          this.id = records[0][classIdIdx];
+        if (records[0]?.[collectionIdIdx]) {
+          this.id = records[0][collectionIdIdx];
         }
-        if (records[0]?.[classMetaIdx]) {
-          this.metaCid = records[0][classMetaIdx];
+        if (records[0]?.[collectionMetaIdx]) {
+          this.metaCid = records[0][collectionMetaIdx];
         }
-        if (records[0]?.[startInstanceIdx]) {
-          this.startInstanceId = records[0][startInstanceIdx];
+        if (records[0]?.[startItemIdx]) {
+          this.startItemId = records[0][startItemIdx];
         }
-        if (records[0]?.[isExistingClassIdx]) {
-          this.isExistingClass = records[0][isExistingClassIdx];
+        if (records[0]?.[isExistingCollectionIdx]) {
+          this.isExistingCollection = records[0][isExistingCollectionIdx];
         }
       }
-      // check if class exists and if the user wants to mint in an existing class.
-      // if a valid class is not already created or does not exist, create the class
-      if (this.id === undefined || wfConfig.class?.id !== this.id) {
-        // check the specified class does not exist
-        let cfgClassId = wfConfig.class.id;
+      // check if collection exists and if the user wants to mint in an existing collection.
+      // if a valid collection is not already created or does not exist, create the collection
+      if (this.id === undefined || wfConfig.collection?.id !== this.id) {
+        // check the specified collection does not exist
+        let cfgCollectionId = wfConfig.collection.id;
         let { api } = network;
-        let uniquesClass = (await api.query.uniques.class(cfgClassId))
+        let uniquesCollection = (await api.query.uniques.class(cfgCollectionId))
           ?.unwrapOr(undefined)
           ?.toJSON();
 
-        if (uniquesClass) {
-          // class already exists ask user if they want to mint in the same class
+        if (uniquesCollection) {
+          // collection already exists ask user if they want to mint in the same collection
           const answer = (await inqAsk([
             {
               type: 'confirm',
-              name: 'appendToClass',
-              message: `A class with classId:${cfgClassId} already exists, do you want to create the instances in the same class?`,
+              name: 'appendToCollection',
+              message: `A collection with collectionId:${cfgCollectionId} already exists, do you want to create the items in the same collection?`,
               default: false,
             },
-          ])) || { appendToClass: false };
-          if (!answer?.appendToClass) {
+          ])) || { appendToCollection: false };
+          if (!answer?.appendToCollection) {
             throw new WorkflowError(
-              'Please set a different class id in your workflow.json settings.'
+              'Please set a different collection id in your workflow.json settings.'
             );
           } else {
-            this.id = cfgClassId;
-            this.startInstanceId = Number(uniquesClass?.items);
-            this.isExistingClass = true;
-            // set the start instance id to the last id available in the class assuming all instances are minted from 0 to number of current instances.
+            this.id = cfgCollectionId;
+            this.startItemId = Number(uniquesCollection?.items);
+            this.isExistingCollection = true;
+            // set the start item id to the last id available in the collection assuming all items are minted from 0 to number of current items.
             console.log(
               notificationMessage(
-                `The class ${cfgClassId} exists. The new items will be added to the class staring from index ${context.class.startInstanceId}.`
+                `The collection ${cfgCollectionId} exists. The new items will be added to the collection staring from index ${context.collection.startItemId}.`
               )
             );
           }
         } else {
-          // create a new class
-          context.class.id = cfgClassId;
+          // create a new collection
+          context.collection.id = cfgCollectionId;
         }
       }
     },
     checkpoint: function () {
       writeCsvSync(
-        cpfiles.class,
+        cpfiles.collection,
         [
-          columnTitles.classId,
-          columnTitles.classMetadata,
-          columnTitles.classStartInstanceId,
-          columnTitles.isExistingClass,
+          columnTitles.collectionId,
+          columnTitles.collectionMetadata,
+          columnTitles.collectionStartItemId,
+          columnTitles.isExistingCollection,
         ],
-        [[this.id, this.metaCid, this.startInstanceId, this.isExistingClass]]
+        [[this.id, this.metaCid, this.startItemId, this.isExistingCollection]]
       );
     },
   },
@@ -220,10 +220,10 @@ const context = {
       }
     },
     load: async function (wfConfig) {
-      let datafile = wfConfig?.instance?.data?.csvFile;
+      let datafile = wfConfig?.item?.data?.csvFile;
       if (!datafile) {
         throw new WorkflowError(
-          'The data source is not configured. Please configure instance.data.csvFile in your workflow.json'
+          'The data source is not configured. Please configure item.data.csvFile in your workflow.json'
         );
       }
       if (!fs.existsSync(datafile)) {
@@ -241,15 +241,15 @@ const context = {
       this.records = records;
 
       // set start and end row numbers
-      const instanceOffset = parseInt(wfConfig?.instance?.data?.offset)
-        ? parseInt(wfConfig?.instance?.data?.offset) - 1
+      const itemOffset = parseInt(wfConfig?.item?.data?.offset)
+        ? parseInt(wfConfig?.item?.data?.offset) - 1
         : 0;
-      const instanceCount =
-        parseInt(wfConfig?.instance?.data?.count) ||
-        records.length - instanceOffset + 1;
-      this.startRecordNo = instanceOffset;
+      const itemCount =
+        parseInt(wfConfig?.item?.data?.count) ||
+        records.length - itemOffset + 1;
+      this.startRecordNo = itemOffset;
       this.endRecordNo = Math.min(
-        this.startRecordNo + instanceCount,
+        this.startRecordNo + itemCount,
         records.length
       );
     },
@@ -330,7 +330,7 @@ const getContext = () => {
 
 const checkPreviousCheckpoints = async () => {
   const checkpointExists =
-    fs.existsSync(cpfiles.class) ||
+    fs.existsSync(cpfiles.collection) ||
     fs.existsSync(cpfiles.batch) ||
     fs.existsSync(cpfiles.data);
   if (!checkpointExists) return;
