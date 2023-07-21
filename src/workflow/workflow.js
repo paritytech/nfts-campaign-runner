@@ -47,7 +47,7 @@ const executeInBatch = async (batchInfo, action, callback) => {
   if (checkpointedBatchNo) {
     assert(
       isNumber(checkpointedBatchNo),
-      'checkpoinyed batch number is not a valid number'
+      'checkpointed batch number is not a valid number'
     );
     console.log(notificationMessage('Checkpoint data spotted'));
   }
@@ -631,19 +631,19 @@ const reapUnusedFunds = async (wfConfig) => {
   const { dryRun } = context;
   const { api, keyring, signingPair: seedKeyPair } = context.network;
 
-  let [secretColumn] = context.data.getColumns([columnTitles.secret]);
+  const [secretColumn] = context.data.getColumns([columnTitles.secret]);
 
   // set the destination address to the address derived from the seed in the workflow
-  let destAddress = seedKeyPair?.address;
+  const destAddress = seedKeyPair?.address;
   if (!destAddress) {
     throw WorkflowError(
       'was not able to generate the address from the seed specified by network.seed in the workflow file.'
     );
   }
   // load last minted batch from checkpoint
-  let batchSize = parseInt(wfConfig?.item?.batchSize) || 100;
+  const batchSize = parseInt(wfConfig?.item?.batchSize) || 100;
 
-  let batchInfo = {
+  const batchInfo = {
     startRecordNo,
     endRecordNo,
     checkpointedBatchNo: 0,
@@ -713,8 +713,9 @@ const burnUnclaimedInBatch = async (wfConfig) => {
       'No collectionId is loaded in context. Either the collectionId is not specified in the workflow file or the checkpoint is not in correct state.'
     );
   }
-  let collectionId = context.collection.id;
-  let [addressColumn] = context.data.getColumns([columnTitles.address]);
+  const collectionId = context.collection.id;
+  const [addressColumn] = context.data.getColumns([columnTitles.address]);
+  const [secretColumn] = context.data.getColumns([columnTitles.secret]);
   if (
     !addressColumn.records?.[startRecordNo] ||
     !addressColumn.records?.[endRecordNo - 1]
@@ -723,34 +724,53 @@ const burnUnclaimedInBatch = async (wfConfig) => {
       'No address column is recorded in the workflow or the checkpoint is not in a correct state.'
     );
   }
+  if (
+    !secretColumn.records?.[startRecordNo] ||
+    !secretColumn.records?.[endRecordNo - 1]
+  ) {
+    throw new WorkflowError(
+      'No secret column is recorded in the workflow or the checkpoint is not in a correct state.'
+    );
+  }
 
   // load last minted batch from checkpoint
-  let batchSize = parseInt(wfConfig?.item?.batchSize) || 100;
-  let ownerAddresses = addressColumn.records;
+  const batchSize = parseInt(wfConfig?.item?.batchSize) || 100;
+  const ownerAddresses = addressColumn.records;
+  const ownerSecrets = secretColumn.records;
 
-  let batchInfo = {
+  const batchInfo = {
     startRecordNo,
     endRecordNo,
     checkpointedBatchNo: 0,
     batchSize,
   };
 
-  let batchAction = async (batchStartRecordNo, batchEndRecordNo, batchNo) => {
-    let batchOwnerAddresses = ownerAddresses.slice(
+  const batchAction = async (batchStartRecordNo, batchEndRecordNo, batchNo) => {
+    const batchOwnerAddresses = ownerAddresses.slice(
+      batchStartRecordNo,
+      batchEndRecordNo
+    );
+    const batchOwnerSecrets = ownerSecrets.slice(
       batchStartRecordNo,
       batchEndRecordNo
     );
 
-    let unclaimed = await Promise.all(
-      batchOwnerAddresses.map((addr) =>
-        api.query.nfts.account.keys(addr, collectionId)
+    let addressToSecret = {};
+    const unclaimed = await Promise.all(
+      batchOwnerAddresses.map((addr, i) => {
+          addressToSecret[addr.toLowerCase()] = batchOwnerSecrets[i];
+          return api.query.nfts.account.keys(addr, collectionId);
+        }
       )
     );
     let unclaimedItems = [];
-    for (let acountAssets of unclaimed) {
-      acountAssets.forEach((key, i) => {
+    for (const accountAssets of unclaimed) {
+      accountAssets.forEach((key, i) => {
         let [address, collectionId, itemId] = key.args;
-        unclaimedItems.push(itemId);
+        unclaimedItems.push({
+          itemId,
+          secret: addressToSecret[address.toString().toLowerCase()],
+        });
       });
     }
 
@@ -1138,14 +1158,13 @@ const burnAndReap = async (configFile = './src/workflow.json', dryRunMode) => {
   if (error) {
     throw new WorkflowError(error);
   }
-  console.log('> setting the context for the update metadata workflow ...');
+  console.log('> setting the context for the burn-reap workflow ...');
 
   await checkPreviousCheckpoints();
-  console.log('1');
   await loadContext(config);
   let context = getContext();
 
-  // 0- run various checks
+  // 0 - run various checks
   await verifyWorkflow(config);
 
   if (dryRunMode) {
@@ -1158,16 +1177,18 @@ const burnAndReap = async (configFile = './src/workflow.json', dryRunMode) => {
     return;
   }
 
-  // 1- skip create collection
-  // since we want to burn and reap accounts we assume the collection in the workflow is already created otherwise it will throw error.
+  // 1 - skip collection creation
+  // since we want to burn and reap the accounts, we assume the collection is set in the workflow and is already created,
+  // otherwise we throw an error.
+
   // load collectionId from config:
   context.collection.id = config.collection.id;
 
-  // 2- burn unclaimed items
+  // 2 - burn unclaimed items
   console.info(stepTitle`\n\nBurning unclaimed items ...`);
   await burnUnclaimedInBatch(config);
 
-  //3- reap the unclimed secrets and return their fund to the signingAccount
+  // 3 - reap the unclaimed secrets and return their fund to the signingAccount
   console.info(
     stepTitle`\n\nReclaiming the funds from the unclaimed secrets... `
   );

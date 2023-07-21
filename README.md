@@ -98,7 +98,7 @@ In some cases, it might be needed to set or change the matadata for the items af
 
 ### burn-reap
 
-This command can be used to burn the unclaimed NFTs and reap the initial funds from unclaimed secrets and transfer the funds back to the original account. The command basically goes through all the gift secrets listed in the `.csv` file that is specified by the `item.data.csvFile` in the workflow, and for each unclaimed secret (secrets that their recipiant has not claimed its NFT) it will burn the unclaimed NFTs. It will also transfer all the funds from that gift secret to the original account that is specified by `network.accountSeed`.
+This command can be used to burn the unclaimed NFTs and reap the initial funds from unclaimed secrets and transfer the funds back to the original account. The command basically goes through all the gift secrets listed in the `.csv` file that is specified by the `item.data.csvFile` in the workflow, and for each unclaimed secret (secrets that their recipient has not claimed its NFT) it will burn the unclaimed NFTs. It will also transfer all the funds from that gift secret to the original account that is specified by `network.accountSeed`.
 
 ## Checkpoints
 
