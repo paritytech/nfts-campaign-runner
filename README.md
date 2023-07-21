@@ -34,18 +34,18 @@ To define a workflow you need to provide the cli with a workflow `.json` file wh
     "apiKey": "<PinataApiKey>",
     "secretApiKey": "<PinataSecretApiKey>"
   },
-  "class": {
-    "id": "<collection Id that the NFT instances are being minted in>",
+  "collection": {
+    "id": "<collection Id that the NFT items are being minted in>",
     "metadata": {
       "imageFile": "<Path to the image file that is used for collection metadata>",
       "videoFile": "<Path to the video file that is used for collection metadata>",
-      "name": "<the value for the name field in class metadata>",
+      "name": "<the value for the name field in collection metadata>",
       "description": "the value for the description field in collection metadata"
     }
   },
-  "instance": {
+  "item": {
     "data": {
-      "csvFile": "<a csv file that contains the instances data>",
+      "csvFile": "<a csv file that contains the items data>",
       "offset": "<the row offset, if not specified it starts from row 0>",
       "count": "<the number of rows to be used after offset, if not specified it will count up to the last row.>"
     },
@@ -53,8 +53,8 @@ To define a workflow you need to provide the cli with a workflow `.json` file wh
     "metadata": {
       "imageFile": "<the full path to the media file that contains the NFT image file>",
       "videoFile": "<the full path to the media file that contains the NFT video file>",
-      "name": "the value for the name field in the instance metadata",
-      "description": "the value for the description field in the instance metadata"
+      "name": "the value for the name field in the item metadata",
+      "description": "the value for the description field in the item metadata"
     }
   }
 }
@@ -63,11 +63,11 @@ To define a workflow you need to provide the cli with a workflow `.json` file wh
 Note:
 
 - the _proxiedAddress_ is optional, and if is provided the account that is derived from the _accountSeed_ will act as a proxy account for that address and all the extrinsic calls will be sent as a proxy call on behalf of the _proxiedAddress_.
-- The data file specified by `instance.data.csvFile` is a csv file, which the number of rows in the file specifies the maximum number of instances that will be minted. If specified, the combination of offset and count determines the actual number of instances that are going to be minted.
-- The offset specifies the first row number in the csv datafile that the instances will be minted from that row up to the specified count.
+- The data file specified by `item.data.csvFile` is a csv file, which the number of rows in the file specifies the maximum number of items that will be minted. If specified, the combination of offset and count determines the actual number of items that are going to be minted.
+- The offset specifies the first row number in the csv datafile that the items will be minted from that row up to the specified count.
 - If the calculated row numbers fall outside of the number of rows in the csv file (e.x. `offset+count-1 > last_row_number_in_the_file`) the minting will stop after the last row number.
-- The `instance.metadata.imageFile` specifies the file path that contains the media file that is going to be minted.
-- The `instance.metadata.videoFile` specifies the file path that contains the video file that is going to be minted. Has the same naming format as `instance.metadata.imageFile`.
+- The `item.metadata.imageFile` specifies the file path that contains the media file that is going to be minted.
+- The `item.metadata.videoFile` specifies the file path that contains the video file that is going to be minted. Has the same naming format as `item.metadata.imageFile`.
 - the values surrounded by `<<` and `>>` will be filled from the collumns of the data `.csv` file. e.g. fo the
   path example: `/Users/user/nfts/<<image name>>.png` the `<<image name>>` will be replaced with the value from the "image name" column for each row in the csv datafile.
   Additionally, you can use an empty template: `/Users/user/nfts/<<>>.png` in which the `<<>>` will be replaced with the row numbers for each row.
@@ -88,7 +88,7 @@ There is also an optional parameter available for the dry-run. It will validate 
 uniqcamp run --dry-run <path to workflow.json>
 ```
 
-After the minting process is complete a final `.csv` data file will be generated at the same path as input datafile (specified by `instance.data.csvFile`), This final data file will include the gift secret codes as well some more information.
+After the minting process is complete a final `.csv` data file will be generated at the same path as input datafile (specified by `item.data.csvFile`), This final data file will include the gift secret codes as well some more information.
 
 ### Setting or changing the item metadata
 
@@ -96,7 +96,7 @@ In some cases, it might be needed to set or change the matadata for the items af
 
 ### burn-reap
 
-This command can be used to burn the unclaimed NFTs and reap the initial funds from unclaimed secrets and transfer the funds back to the original account. The command basically goes through all the gift secrets listed in the `.csv` file that is specified by the `instance.data.csvFile` in the workflow, and for each unclaimed secret (secrets that their recipiant has not claimed its NFT) it will burn the unclaimed NFTs. It will also transfer all the funds from that gift secret to the original account that is specified by `network.accountSeed`.
+This command can be used to burn the unclaimed NFTs and reap the initial funds from unclaimed secrets and transfer the funds back to the original account. The command basically goes through all the gift secrets listed in the `.csv` file that is specified by the `item.data.csvFile` in the workflow, and for each unclaimed secret (secrets that their recipiant has not claimed its NFT) it will burn the unclaimed NFTs. It will also transfer all the funds from that gift secret to the original account that is specified by `network.accountSeed`.
 
 ## Checkpoints
 

@@ -1,19 +1,19 @@
 const { signAndSendTx } = require('../chain/txHandler');
 
-let mintClassInstances = async (
+let mintCollectionItems = async (
   network,
-  classId,
-  startInstanceId,
+  collectionId,
+  startItemId,
   owners,
   dryRun
 ) => {
   const { api, signingPair, proxiedAddress } = network;
 
-  let instanceId = startInstanceId || 0;
+  let itemId = startItemId || 0;
   let txs = [];
   for (let i = 0; i < owners.length; i++) {
-    txs.push(api.tx.uniques.mint(classId, instanceId, owners[i]));
-    instanceId += 1;
+    txs.push(api.tx.uniques.mint(collectionId, itemId, owners[i]));
+    itemId += 1;
   }
 
   let txBatch = api.tx.utility.batchAll(txs);
@@ -23,23 +23,23 @@ let mintClassInstances = async (
   await signAndSendTx(api, call, signingPair, true, dryRun);
 };
 
-let burnInstances = async (network, classId, instanceIds, dryRun) => {
+let burnItems = async (network, collectionId, itemIds, dryRun) => {
   const { api, signingPair, proxiedAddress } = network;
 
   let txs = [];
-  for (let instanceId of instanceIds) {
-    txs.push(api.tx.uniques.burn(classId, instanceId, null));
+  for (let itemId of itemIds) {
+    txs.push(api.tx.uniques.burn(collectionId, itemId, null));
 
     const hasMetadata = (
-      await api.query.uniques.instanceMetadataOf(classId, instanceId)
+      await api.query.uniques.instanceMetadataOf(collectionId, itemId)
     ).isSome;
-    // if instance has metadata, clear its metadata
+    // if item has metadata, clear its metadata
     if (hasMetadata) {
-      txs.push(api.tx.uniques.clearMetadata(classId, instanceId));
+      txs.push(api.tx.uniques.clearMetadata(collectionId, itemId));
     }
   }
 
-  instanceIds?.forEach((instanceId) => {});
+  itemIds?.forEach((itemId) => {});
 
   let txBatch = api.tx.utility.batchAll(txs);
   let call = proxiedAddress
@@ -48,4 +48,4 @@ let burnInstances = async (network, classId, instanceIds, dryRun) => {
   await signAndSendTx(api, call, signingPair, true, dryRun);
 };
 
-module.exports = { mintClassInstances, burnInstances };
+module.exports = { mintCollectionItems, burnItems };

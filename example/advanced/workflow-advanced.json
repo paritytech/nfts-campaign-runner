@@ -8,16 +8,16 @@
     "apiKey": "<PinataApiKey>",
     "secretApiKey": "<PinataSecretApiKey>"
   },
-  "class": {
-    "id": "<classId that the NFT instances are being minted in>",
+  "collection": {
+    "id": "<collectionId that the NFT items are being minted in>",
     "metadata": {
-      "imageFile": "~/class-image.png",
-      "videoFile": "~/class-video.mp4",
+      "imageFile": "~/collection-image.png",
+      "videoFile": "~/collection-video.mp4",
       "name": "An example NFT campaign",
       "description": "This is an example NFT campaign, with images and videos, and uses interpolation feature to include data from csv columns in description and name"
     }
   },
-  "instance": {
+  "item": {
     "data": {
       "csvFile": "~/advanced.csv"
     },
