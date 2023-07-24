@@ -1,6 +1,6 @@
-# uniques-campaign-runner
+# nfts-campaign-runner
 
-A cli tool to automate running NFT campaign workflows on substrate-uniques-pallet in bulk.  
+A cli tool to automate running NFT campaign workflows on substrate-nfts-pallet in bulk.  
 The cli tool works in combination with [nft gift app](https://github.com/hamidra/dotdrop/tree/polkadot-nft) to mint NFTs in bulk and creates NFT gift secret codes which can be claimed using the [nft claim apps](https://claimnft.kusama.network).
 
 ## Install
@@ -35,7 +35,7 @@ To define a workflow you need to provide the cli with a workflow `.json` file wh
     "secretApiKey": "<PinataSecretApiKey>"
   },
   "collection": {
-    "id": "<collection Id that the NFT items are being minted in>",
+    "id": "<leave an empty string to create a new collection or put the collection's id to continue minting into that collection>",
     "metadata": {
       "imageFile": "<Path to the image file that is used for collection metadata>",
       "videoFile": "<Path to the video file that is used for collection metadata>",
@@ -80,6 +80,8 @@ To run the workflow you need to execute the cli with `run ` subcommand while pas
 
 ```
 uniqcamp run <path to workflow.json>
+or
+npm run uniqcamp -- run <path to workflow.json>
 ```
 
 There is also an optional parameter available for the dry-run. It will validate the workflow without running the workflow and submitting transactions.
@@ -96,7 +98,7 @@ In some cases, it might be needed to set or change the matadata for the items af
 
 ### burn-reap
 
-This command can be used to burn the unclaimed NFTs and reap the initial funds from unclaimed secrets and transfer the funds back to the original account. The command basically goes through all the gift secrets listed in the `.csv` file that is specified by the `item.data.csvFile` in the workflow, and for each unclaimed secret (secrets that their recipiant has not claimed its NFT) it will burn the unclaimed NFTs. It will also transfer all the funds from that gift secret to the original account that is specified by `network.accountSeed`.
+This command can be used to burn the unclaimed NFTs and reap the initial funds from unclaimed secrets and transfer the funds back to the original account. The command basically goes through all the gift secrets listed in the `.csv` file that is specified by the `item.data.csvFile` in the workflow, and for each unclaimed secret (secrets that their recipient has not claimed its NFT) it will burn the unclaimed NFTs. It will also transfer all the funds from that gift secret to the original account that is specified by `network.accountSeed`.
 
 ## Checkpoints
 
@@ -104,7 +106,7 @@ The workflow is checkpointed at each step, in case it is halted at any point dur
 
 # examples
 
-For sample worflows check the example folder.
+For sample workflows check the example folder.
 
 - The _simple_ folder includes a csv with no information and mints 10 NFTs with no customized metadata.
 - The advanced folder includes a csv with multiple columns and uses the data from csv columns to create customized NFTs, with customized metadata and different images and videos for each NFT.

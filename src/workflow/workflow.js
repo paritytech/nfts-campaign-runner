@@ -47,7 +47,7 @@ const executeInBatch = async (batchInfo, action, callback) => {
   if (checkpointedBatchNo) {
     assert(
       isNumber(checkpointedBatchNo),
-      'checkpoinyed batch number is not a valid number'
+      'checkpointed batch number is not a valid number'
     );
     console.log(notificationMessage('Checkpoint data spotted'));
   }
@@ -78,33 +78,44 @@ const executeInBatch = async (batchInfo, action, callback) => {
 };
 
 const createCollection = async (wfConfig) => {
-  // 1- create collection if does not exist.
+  // 1 - create a collection if it does not exist.
   const context = getContext();
   const { api, signingPair, proxiedAddress } = context.network;
   const { dryRun } = context;
 
-  if (context.collection.id === undefined) {
-    throw new WorkflowError(
-      'No collection.id checkpoint is recorded or the checkpoint is not in correct state'
-    );
-  }
-
+  let collectionId = context.collection.id;
   if (context.collection.isExistingCollection) {
     console.info('The collection already exists.');
   } else {
     // create the new collection
-    let tx = api.tx.uniques.create(context.collection.id, signingPair?.address);
-    let call = proxiedAddress
+    let tx = api.tx.nfts.create(signingPair?.address, {
+      settings: 0,
+      mintSettings: {
+        mintType: 'Issuer',
+        defaultItemSettings: 0,
+      },
+    });
+    const call = proxiedAddress
       ? api.tx.proxy.proxy(proxiedAddress, 'Assets', tx)
       : tx;
-    await signAndSendTx(api, call, signingPair, true, dryRun);
+    const events = await signAndSendTx(api, call, signingPair, true, dryRun);
+
+    let newId;
+    for (const { event: { data, method, section } } of events) {
+      if (section === 'nfts' && method === 'Created') {
+        newId = data[0].toPrimitive();
+        break;
+      }
+    }
+    if (newId === undefined) throw new WorkflowError("Unable to detect created collection's id");
+    collectionId = newId;
   }
   // set the collection checkpoint
-  if (!dryRun) context.collection.checkpoint();
+  if (!dryRun) context.collection.checkpoint(collectionId);
 };
 
 const setCollectionMetadata = async (wfConfig) => {
-  // 2-generate/set collection metadata
+  // 2 - generate/set collection metadata
   const context = getContext();
   const { dryRun } = context;
 
@@ -123,7 +134,7 @@ const setCollectionMetadata = async (wfConfig) => {
         {
           type: 'confirm',
           name: 'withoutMetadata',
-          message: `No collection metadata is configured in workflow.json, do you want to continue without setting collection metadata`,
+          message: `No collection metadata is configured in workflow.json, do you want to continue without setting the collection metadata`,
           default: false,
         },
       ])) || { withoutMetadata: false };
@@ -153,7 +164,7 @@ const setCollectionMetadata = async (wfConfig) => {
 };
 
 const generateGiftSecrets = async (wfConfig) => {
-  // 3-create nft secrets + addresses
+  // 3 - create nft secrets + addresses
   let context = getContext();
   const { dryRun } = context;
   let keyring = context.network.keyring;
@@ -189,7 +200,7 @@ const generateGiftSecrets = async (wfConfig) => {
 };
 
 const mintItemsInBatch = async (wfConfig) => {
-  //4- mint items in batch
+  // 4 - mint items in batch
   const context = getContext();
   const { startRecordNo, endRecordNo } = context.data;
   const { dryRun } = context;
@@ -282,7 +293,7 @@ const formatFileName = (fileNameTemplate, rowNumber, { header, records }) => {
 };
 
 const pinAndSetImageCid = async (wfConfig) => {
-  // 5- pin images and generate metadata
+  // 5 - pin images and generate metadata
   const context = getContext();
   const { startRecordNo, endRecordNo } = context.data;
   const { dryRun } = context;
@@ -422,8 +433,8 @@ const pinAndSetImageCid = async (wfConfig) => {
   await executeInBatch(batchInfo, batchAction, batchCheckpointCb);
 };
 
-const setItemMetadata = async (wfConfig) => {
-  // 6- set metadata for items
+const setItemsMetadata = async (wfConfig) => {
+  // 6 - set metadata for items
   const itemMetadata = wfConfig?.item?.metadata;
   if (isEmptyObject(itemMetadata)) {
     console.log(
@@ -620,19 +631,19 @@ const reapUnusedFunds = async (wfConfig) => {
   const { dryRun } = context;
   const { api, keyring, signingPair: seedKeyPair } = context.network;
 
-  let [secretColumn] = context.data.getColumns([columnTitles.secret]);
+  const [secretColumn] = context.data.getColumns([columnTitles.secret]);
 
   // set the destination address to the address derived from the seed in the workflow
-  let destAddress = seedKeyPair?.address;
+  const destAddress = seedKeyPair?.address;
   if (!destAddress) {
     throw WorkflowError(
       'was not able to generate the address from the seed specified by network.seed in the workflow file.'
     );
   }
   // load last minted batch from checkpoint
-  let batchSize = parseInt(wfConfig?.item?.batchSize) || 100;
+  const batchSize = parseInt(wfConfig?.item?.batchSize) || 100;
 
-  let batchInfo = {
+  const batchInfo = {
     startRecordNo,
     endRecordNo,
     checkpointedBatchNo: 0,
@@ -650,7 +661,7 @@ const reapUnusedFunds = async (wfConfig) => {
         );
 
         // check the account does not have any nfts.
-        let nfts = await api.query.uniques.account.keys(sourceAddress);
+        let nfts = await api.query.nfts.account.keys(sourceAddress);
         if (nfts.length !== 0) {
           console.log(
             notificationMessage(
@@ -702,8 +713,9 @@ const burnUnclaimedInBatch = async (wfConfig) => {
       'No collectionId is loaded in context. Either the collectionId is not specified in the workflow file or the checkpoint is not in correct state.'
     );
   }
-  let collectionId = context.collection.id;
-  let [addressColumn] = context.data.getColumns([columnTitles.address]);
+  const collectionId = context.collection.id;
+  const [addressColumn] = context.data.getColumns([columnTitles.address]);
+  const [secretColumn] = context.data.getColumns([columnTitles.secret]);
   if (
     !addressColumn.records?.[startRecordNo] ||
     !addressColumn.records?.[endRecordNo - 1]
@@ -712,34 +724,53 @@ const burnUnclaimedInBatch = async (wfConfig) => {
       'No address column is recorded in the workflow or the checkpoint is not in a correct state.'
     );
   }
+  if (
+    !secretColumn.records?.[startRecordNo] ||
+    !secretColumn.records?.[endRecordNo - 1]
+  ) {
+    throw new WorkflowError(
+      'No secret column is recorded in the workflow or the checkpoint is not in a correct state.'
+    );
+  }
 
   // load last minted batch from checkpoint
-  let batchSize = parseInt(wfConfig?.item?.batchSize) || 100;
-  let ownerAddresses = addressColumn.records;
+  const batchSize = parseInt(wfConfig?.item?.batchSize) || 100;
+  const ownerAddresses = addressColumn.records;
+  const ownerSecrets = secretColumn.records;
 
-  let batchInfo = {
+  const batchInfo = {
     startRecordNo,
     endRecordNo,
     checkpointedBatchNo: 0,
     batchSize,
   };
 
-  let batchAction = async (batchStartRecordNo, batchEndRecordNo, batchNo) => {
-    let batchOwnerAddresses = ownerAddresses.slice(
+  const batchAction = async (batchStartRecordNo, batchEndRecordNo, batchNo) => {
+    const batchOwnerAddresses = ownerAddresses.slice(
+      batchStartRecordNo,
+      batchEndRecordNo
+    );
+    const batchOwnerSecrets = ownerSecrets.slice(
       batchStartRecordNo,
       batchEndRecordNo
     );
 
-    let unclaimed = await Promise.all(
-      batchOwnerAddresses.map((addr) =>
-        api.query.uniques.account.keys(addr, collectionId)
+    let addressToSecret = {};
+    const unclaimed = await Promise.all(
+      batchOwnerAddresses.map((addr, i) => {
+          addressToSecret[addr.toLowerCase()] = batchOwnerSecrets[i];
+          return api.query.nfts.account.keys(addr, collectionId);
+        }
       )
     );
     let unclaimedItems = [];
-    for (let acountAssets of unclaimed) {
-      acountAssets.forEach((key, i) => {
+    for (const accountAssets of unclaimed) {
+      accountAssets.forEach((key, i) => {
         let [address, collectionId, itemId] = key.args;
-        unclaimedItems.push(itemId);
+        unclaimedItems.push({
+          itemId,
+          secret: addressToSecret[address.toString().toLowerCase()],
+        });
       });
     }
 
@@ -838,7 +869,7 @@ const calcMinInitialFund = async () => {
   // calculate minimum initial fund
   const destinationAddress = '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY'; // Alice's address
   const { existentialDeposit } = api.consts.balances;
-  const info = await api.tx.uniques
+  const info = await api.tx.nfts
     .transfer(collectionId, itemId || 0, destinationAddress)
     .paymentInfo(signingPair.address);
   // The actual fee will be more than the estimated partial fee after adding the actual weights.
@@ -855,13 +886,13 @@ const calculateCost = async (wfConfig) => {
   const context = getContext();
   const { api } = context.network;
 
-  let metadataDepositBase = api.consts.uniques.metadataDepositBase;
-  let depositPerByte = api.consts.uniques.depositPerByte;
+  let metadataDepositBase = api.consts.nfts.metadataDepositBase;
+  let depositPerByte = api.consts.nfts.depositPerByte;
   let metadataDeposit = metadataDepositBase.add(
     depositPerByte.muln(METADATA_SIZE)
   );
-  let collectionDeposit = api.consts.uniques.collectionDeposit;
-  let itemDeposit = api.consts.uniques.itemDeposit;
+  let collectionDeposit = api.consts.nfts.collectionDeposit;
+  let itemDeposit = api.consts.nfts.itemDeposit;
   let metadataCount = 0;
   let itemCount = 0;
   let collectionCount = 0;
@@ -910,7 +941,7 @@ const runWorkflow = async (configFile = './src/workflow.json', dryRunMode) => {
   let context = getContext();
   let { api, signingPair, chainInfo } = context.network;
 
-  // 0- run various checks
+  // 0 - run various checks
   await verifyWorkflow(config);
 
   // calculate the workflow cost
@@ -994,31 +1025,31 @@ const runWorkflow = async (configFile = './src/workflow.json', dryRunMode) => {
     return;
   }
 
-  // 1- create collection
-  console.info(stepTitle`\n\nCreating the uniques collection ...`);
+  // 1 - create collection
+  console.info(stepTitle`\n\nCreating the nfts collection ...`);
   await createCollection(config);
 
-  // 2- set collectionMetadata
+  // 2 - set collection's metadata
   console.info(stepTitle`\n\nSetting collection metadata ...`);
   await setCollectionMetadata(config);
 
-  // 3- generate secrets
+  // 3 - generate secrets
   console.info(stepTitle`\n\nGenerating gift secrets ...`);
   await generateGiftSecrets(config);
 
-  //4- mint items in batch
+  // 4 - mint items in batch
   console.info(stepTitle`\n\nMinting nft items ...`);
   await mintItemsInBatch(config);
 
-  //5- pin images and generate metadata
+  // 5 - pin images and generate metadata
   console.info(stepTitle`\n\nUploading and pinning the NFTs on IPFS ...`);
   await pinAndSetImageCid(config);
 
-  //6- set metadata for items
+  // 6 - set metadata for items
   console.info(stepTitle`\n\nSetting the item metadata on chain ...`);
-  await setItemMetadata(config);
+  await setItemsMetadata(config);
 
-  //7-fund gift accounts with the initialFund amount.
+  // 7 - fund gift accounts with the initialFund amount.
   console.info(stepTitle`\n\nSeeding the accounts with initial funds ...`);
   await sendInitialFunds(config);
 
@@ -1053,7 +1084,7 @@ const updateMetadata = async (
   await loadContext(config);
   let context = getContext();
 
-  // 0- run various checks
+  // 0 - run various checks
   await verifyWorkflow(config);
 
   if (dryRunMode) {
@@ -1066,22 +1097,23 @@ const updateMetadata = async (
     return;
   }
 
-  // 1- skip create collection
-  // since we just updating the metadata the collection should already exists otherwise the update must fail
+  // 1 - skip collection creation
+  // since we're just updating the metadata, the collection should already exist, otherwise the update must fail
+
   // load collectionId from config:
   context.collection.id = config.collection.id;
 
-  // 2- set collectionMetadata
+  // 2 - set collectionMetadata
   console.info(stepTitle`\n\nSetting collection metadata ...`);
   await setCollectionMetadata(config);
 
-  //3- pin images and generate metadata
+  // 3 - pin images and generate metadata
   console.info(stepTitle`\n\nUploading and pinning the NFTs on IPFS ...`);
   await pinAndSetImageCid(config);
 
-  //4- set metadata for items
-  console.info(stepTitle`\n\nSetting the item metadata on chain ...`);
-  await setItemMetadata(config);
+  // 4 - set metadata for items
+  console.info(stepTitle`\n\nSetting items metadata on chain ...`);
+  await setItemsMetadata(config);
 
   if (!dryRunMode) {
     // move the final data file to the output path, cleanup the checkpoint files.
@@ -1126,14 +1158,13 @@ const burnAndReap = async (configFile = './src/workflow.json', dryRunMode) => {
   if (error) {
     throw new WorkflowError(error);
   }
-  console.log('> setting the context for the update metadata workflow ...');
+  console.log('> setting the context for the burn-reap workflow ...');
 
   await checkPreviousCheckpoints();
-  console.log('1');
   await loadContext(config);
   let context = getContext();
 
-  // 0- run various checks
+  // 0 - run various checks
   await verifyWorkflow(config);
 
   if (dryRunMode) {
@@ -1146,16 +1177,18 @@ const burnAndReap = async (configFile = './src/workflow.json', dryRunMode) => {
     return;
   }
 
-  // 1- skip create collection
-  // since we want to burn and reap accounts we assume the collection in the workflow is already created otherwise it will throw error.
+  // 1 - skip collection creation
+  // since we want to burn and reap the accounts, we assume the collection is set in the workflow and is already created,
+  // otherwise we throw an error.
+
   // load collectionId from config:
   context.collection.id = config.collection.id;
 
-  // 2- burn unclaimed items
+  // 2 - burn unclaimed items
   console.info(stepTitle`\n\nBurning unclaimed items ...`);
   await burnUnclaimedInBatch(config);
 
-  //3- reap the unclimed secrets and return their fund to the signingAccount
+  // 3 - reap the unclaimed secrets and return their fund to the signingAccount
   console.info(
     stepTitle`\n\nReclaiming the funds from the unclaimed secrets... `
   );

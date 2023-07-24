@@ -116,7 +116,7 @@ let setMetadataInBatch = async (
   let txs = [];
   for (let i = 0; i < itemMetaCids.length; i++) {
     let { itemId, metaCid } = itemMetaCids[i];
-    txs.push(api.tx.uniques.setMetadata(collectionId, itemId, metaCid, false));
+    txs.push(api.tx.nfts.setMetadata(collectionId, itemId, metaCid));
   }
 
   let txBatch = api.tx.utility.batchAll(txs);
@@ -133,7 +133,7 @@ let setCollectionMetadata = async (
   dryRun
 ) => {
   const { api, signingPair, proxiedAddress } = connection;
-  let tx = api.tx.uniques.setCollectionMetadata(collectionId, metadataCid, false);
+  let tx = api.tx.nfts.setCollectionMetadata(collectionId, metadataCid);
 
   let txCall = proxiedAddress
     ? api.tx.proxy.proxy(proxiedAddress, 'Assets', tx)
