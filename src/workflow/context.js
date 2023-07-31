@@ -36,6 +36,7 @@ const columnTitles = {
   lastMetadataBatch: 'last metadata batch',
   lastMetaCidBatch: 'last metaCid batch',
   lastBalanceTxBatch: 'last balance transfer batch',
+  receiver: 'receiver',
 };
 
 const cpfiles = {

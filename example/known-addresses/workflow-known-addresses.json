@@ -1,0 +1,31 @@
+{
+  "network": {
+    "provider": "wss://statemine-rpc.polkadot.io",
+    "accountSeed": "<account seed>",
+    "proxiedAddress": "<in case the account is a proxy the address of the proxied/primary account>"
+  },
+  "pinata": {
+    "apiKey": "<PinataApiKey>",
+    "secretApiKey": "<PinataSecretApiKey>"
+  },
+  "collection": {
+    "metadata": {
+      "imageFile": "~/collection-image.png",
+      "videoFile": "~/collection-video.mp4",
+      "name": "An example NFT campaign",
+      "description": "This is an example NFT campaign, with images and videos, and uses interpolation feature to include data from csv columns in description and name"
+    }
+  },
+  "item": {
+    "data": {
+      "csvFile": "~/known-addresses.csv"
+    },
+    "metadata": {
+      "imageFile": "<<NFT #>>.png",
+      "videoFile": "<<NFT #>>.png",
+      "name": "VIP NFT for <<first name>>",
+      "description": "Thanks <<first name>> <<last name>> for being such an incredible member"
+    },
+    "batchSize": "100"
+  }
+}
