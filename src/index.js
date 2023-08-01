@@ -3,7 +3,6 @@
 const { Command } = require('commander');
 const {
   runWorkflow,
-  mintKnownAddressesWorkflow,
   updateMetadata,
   renameFolderContent,
   burnAndReap,
@@ -19,20 +18,9 @@ program
   .description('Run the workflow that is defined in the workflow config file.')
   .argument(`<workflow-config>`, 'the workflow configuration file')
   .option('--dry-run', 'Enable dry-run')
+  .option('--with-preset-address', 'Mint to a preset address list')
   .action(async (workflowConfig, options) => {
-    await runWorkflow(workflowConfig, options.dryRun ?? false);
-    console.log(finalMessage('\ndone!'));
-  });
-
-program
-  .command('mint-to-known-addresses')
-  .description(
-    'Create a collection, mint items to a specified account list and set the metadata based on the specified information in the workflow.'
-  )
-  .argument(`<workflow-config>`, 'the workflow configuration file')
-  .option('--dry-run', 'Enable dry-run')
-  .action(async (workflowConfig, options) => {
-    await mintKnownAddressesWorkflow(workflowConfig, options.dryRun ?? false);
+    await runWorkflow(workflowConfig, options.dryRun ?? false, options.withPresetAddress ?? false);
     console.log(finalMessage('\ndone!'));
   });
 

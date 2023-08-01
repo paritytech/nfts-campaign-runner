@@ -943,7 +943,7 @@ const calculateCost = async (wfConfig) => {
   };
 };
 
-const runWorkflow = async (configFile = './src/workflow.json', dryRunMode) => {
+const runWorkflow = async (configFile = './src/workflow.json', dryRunMode, withPresetAddress) => {
   if (dryRunMode) console.log(importantMessage('\ndry-run mode is on'));
 
   console.log('> loading the workflow config ...');
@@ -970,10 +970,13 @@ const runWorkflow = async (configFile = './src/workflow.json', dryRunMode) => {
     totalMetadataDeposit,
   } = await calculateCost(config);
 
-  let totalCost = totalInitialFunds
-    .add(totalCollectionDeposit)
+  let totalCost = totalCollectionDeposit
     .add(totalItemDeposit)
     .add(totalMetadataDeposit);
+
+  if (!withPresetAddress) {
+    totalCost = totalCost.add(totalInitialFunds);
+  }
 
   let initalFundsStr = formatBalanceWithUnit(totalInitialFunds, chainInfo);
   let collectionDepositStr = formatBalanceWithUnit(
@@ -1001,7 +1004,7 @@ const runWorkflow = async (configFile = './src/workflow.json', dryRunMode) => {
     \ncollection deposit: ${collectionDepositStr} \
     \nitems deposit: ${itemsDepositStr} \
     \nmetadata deposit: ${metadataDepositStr} \
-    \ninitial funds: ${initalFundsStr} \
+    ${!withPresetAddress ? `\ninitial funds: ${initalFundsStr} `:''}\
     \n----------------------------- \
     \ntotal cost: ${totalCostStr} \
     \nAccount Balance: ${usableBalanceStr} \
@@ -1051,9 +1054,15 @@ const runWorkflow = async (configFile = './src/workflow.json', dryRunMode) => {
   console.info(stepTitle`\n\nSetting collection metadata ...`);
   await setCollectionMetadata(config);
 
-  // 3 - generate secrets
-  console.info(stepTitle`\n\nGenerating gift secrets ...`);
-  await generateGiftSecrets(config);
+  if (!withPresetAddress) {
+    // 3 - generate secrets
+    console.info(stepTitle`\n\nGenerating gift secrets ...`);
+    await generateGiftSecrets(config);
+  } else {
+    // 3 - load receivers
+    console.info(stepTitle`\n\nLoading item receivers ...`);
+    await loadReceivers(config);
+  }
 
   // 4 - mint items in batch
   console.info(stepTitle`\n\nMinting nft items ...`);
@@ -1067,142 +1076,11 @@ const runWorkflow = async (configFile = './src/workflow.json', dryRunMode) => {
   console.info(stepTitle`\n\nSetting the item metadata on chain ...`);
   await setItemsMetadata(config);
 
-  // 7 - fund gift accounts with the initialFund amount.
-  console.info(stepTitle`\n\nSeeding the accounts with initial funds ...`);
-  await sendInitialFunds(config);
-
-  if (!dryRunMode) {
-    // move the final data file to the output path, cleanup the checkpoint files.
-    let outFilename = config?.item?.data?.outputCsvFile;
-    context.data.writeFinalResult(outFilename);
-    console.info(
-      importantMessage(`\n\nThe final datafile is copied at \n ${outFilename}`)
-    );
+  if (!withPresetAddress) {
+    // 7 - fund gift accounts with the initialFund amount.
+    console.info(stepTitle`\n\nSeeding the accounts with initial funds ...`);
+    await sendInitialFunds(config);
   }
-
-  // cleanup the workspace, remove checkpoint files
-  context.clean();
-};
-
-const mintKnownAddressesWorkflow = async (configFile = './src/workflow.json', dryRunMode) => {
-  if (dryRunMode) console.log(importantMessage('\ndry-run mode is on'));
-
-  console.log('> loading the workflow config ...');
-  let { error, config } = parseConfig(configFile);
-
-  if (error) {
-    throw new WorkflowError(error);
-  }
-  console.log('> setting the context for the workflow ...');
-
-  await checkPreviousCheckpoints();
-  await loadContext(config);
-  let context = getContext();
-  let { api, signingPair, chainInfo } = context.network;
-
-  // 0 - run various checks
-  await verifyWorkflow(config);
-
-  // calculate the workflow cost
-  let {
-    totalCollectionDeposit,
-    totalItemDeposit,
-    totalMetadataDeposit,
-  } = await calculateCost(config);
-
-  let totalCost = totalCollectionDeposit
-    .add(totalItemDeposit)
-    .add(totalMetadataDeposit);
-
-  let collectionDepositStr = formatBalanceWithUnit(
-    totalCollectionDeposit,
-    chainInfo
-  );
-  let itemsDepositStr = formatBalanceWithUnit(totalItemDeposit, chainInfo);
-  let metadataDepositStr = formatBalanceWithUnit(
-    totalMetadataDeposit,
-    chainInfo
-  );
-  let totalCostStr = formatBalanceWithUnit(totalCost, chainInfo);
-
-  // check the minting account has enough funds to mint the workflow.
-  let adminAddress = signingPair.address;
-  let { data: balance } = await api.query.system.account(adminAddress);
-  let usableBalance = balance.free.gte(balance.frozen)
-    ? balance.free.sub(balance.frozen)
-    : new BN(0);
-  let usableBalanceStr = formatBalanceWithUnit(usableBalance, chainInfo);
-
-  console.info(
-    `\
-    \nThe cost of running the remaining workflow is : \
-    \ncollection deposit: ${collectionDepositStr} \
-    \nitems deposit: ${itemsDepositStr} \
-    \nmetadata deposit: ${metadataDepositStr} \
-    \n----------------------------- \
-    \ntotal cost: ${totalCostStr} \
-    \nAccount Balance: ${usableBalanceStr} \
-    \n \
-    `
-  );
-
-  if (totalCost.gt(usableBalance)) {
-    console.info(
-      notificationMessage(
-        `The account does not have enough funds to cover the cost of running the workflow.\
-        \nThe workflow might stop at any step once your available balance is consumed.
-        `
-      )
-    );
-
-    let message = `Would you like to continue the workflow without enough funds?`;
-    const { continueWithoutFunds } = (await inqAsk([
-      {
-        type: 'confirm',
-        name: 'continueWithoutFunds',
-        message,
-        default: false,
-      },
-    ])) || { continueWithoutFunds: false };
-
-    if (!continueWithoutFunds) {
-      return;
-    }
-  }
-
-  if (dryRunMode) {
-    // TODO: uncomment once we find a true way to detect that method on rpc nodes
-    // await enableDryRun();
-
-    // temporary code
-    console.info(importantMessage('\ndry-run check successfully finished'));
-    context.clean();
-    return;
-  }
-
-  // 1 - create collection
-  console.info(stepTitle`\n\nCreating the nfts collection ...`);
-  await createCollection(config);
-
-  // 2 - set collection's metadata
-  console.info(stepTitle`\n\nSetting collection metadata ...`);
-  await setCollectionMetadata(config);
-
-  // 3 - load receivers
-  console.info(stepTitle`\n\nLoading item receivers ...`);
-  await loadReceivers(config);
-
-  // 4 - mint items in batch
-  console.info(stepTitle`\n\nMinting nft items ...`);
-  await mintItemsInBatch(config);
-
-  // 5 - pin images and generate metadata
-  console.info(stepTitle`\n\nUploading and pinning the NFTs on IPFS ...`);
-  await pinAndSetImageCid(config);
-
-  // 6 - set metadata for items
-  console.info(stepTitle`\n\nSetting the item metadata on chain ...`);
-  await setItemsMetadata(config);
 
   if (!dryRunMode) {
     // move the final data file to the output path, cleanup the checkpoint files.
@@ -1360,7 +1238,6 @@ const burnAndReap = async (configFile = './src/workflow.json', dryRunMode) => {
 
 module.exports = {
   runWorkflow,
-  mintKnownAddressesWorkflow,
   updateMetadata,
   renameFolderContent,
   burnAndReap,

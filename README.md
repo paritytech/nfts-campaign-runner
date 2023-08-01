@@ -94,12 +94,12 @@ After the minting process is complete a final `.csv` data file will be generated
 
 ### Minting to a known address list
 
-For cases when we don't want to generate and pre-fund new account, there is an option to mint to the predetermined receivers list.
+For cases when we don't want to generate and pre-fund new accounts, there is an option to mint to a predetermined receivers list.
 
 ```
-uniqcamp mint-to-known-addresses --dry-run <path to workflow.json>
+uniqcamp run --with-preset-address <path to workflow.json>
 or
-npm run uniqcamp -- mint-to-known-addresses <path to workflow.json>
+npm run uniqcamp -- run --with-preset-address <path to workflow.json>
 ```
 
 ### Setting or changing the item metadata
