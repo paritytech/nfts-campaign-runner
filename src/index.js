@@ -11,15 +11,16 @@ const { errorMessage, finalMessage } = require('./utils/styles');
 const { WorkflowError } = require('./Errors');
 const program = new Command();
 
-program.version('0.0.1');
+program.version('1.0.0');
 
 program
   .command('run')
   .description('Run the workflow that is defined in the workflow config file.')
   .argument(`<workflow-config>`, 'the workflow configuration file')
   .option('--dry-run', 'Enable dry-run')
+  .option('--with-preset-address', 'Mint to a preset address list')
   .action(async (workflowConfig, options) => {
-    await runWorkflow(workflowConfig, options.dryRun ?? false);
+    await runWorkflow(workflowConfig, options.dryRun ?? false, options.withPresetAddress ?? false);
     console.log(finalMessage('\ndone!'));
   });
 

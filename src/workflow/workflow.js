@@ -163,6 +163,24 @@ const setCollectionMetadata = async (wfConfig) => {
   }
 };
 
+const loadReceivers = async (wfConfig) => {
+  let context = getContext();
+  const { dryRun } = context;
+  const [addressColumn] = context.data.getColumns([columnTitles.receiver]) || [];
+
+  for (let i = 0; i < context.data.records.length; i++) {
+    if (i >= addressColumn.records.length) {
+      addressColumn.records.push('');
+    }
+  }
+  // We change the column title here so that the mintItemsInBatch() would get them
+  addressColumn.title = columnTitles.address;
+  context.data.setColumns([addressColumn]);
+
+  if (!dryRun) context.data.checkpoint();
+  console.log('Receivers loaded');
+};
+
 const generateGiftSecrets = async (wfConfig) => {
   // 3 - create nft secrets + addresses
   let context = getContext();
@@ -925,7 +943,7 @@ const calculateCost = async (wfConfig) => {
   };
 };
 
-const runWorkflow = async (configFile = './src/workflow.json', dryRunMode) => {
+const runWorkflow = async (configFile = './src/workflow.json', dryRunMode, withPresetAddress) => {
   if (dryRunMode) console.log(importantMessage('\ndry-run mode is on'));
 
   console.log('> loading the workflow config ...');
@@ -952,10 +970,13 @@ const runWorkflow = async (configFile = './src/workflow.json', dryRunMode) => {
     totalMetadataDeposit,
   } = await calculateCost(config);
 
-  let totalCost = totalInitialFunds
-    .add(totalCollectionDeposit)
+  let totalCost = totalCollectionDeposit
     .add(totalItemDeposit)
     .add(totalMetadataDeposit);
+
+  if (!withPresetAddress) {
+    totalCost = totalCost.add(totalInitialFunds);
+  }
 
   let initalFundsStr = formatBalanceWithUnit(totalInitialFunds, chainInfo);
   let collectionDepositStr = formatBalanceWithUnit(
@@ -983,7 +1004,7 @@ const runWorkflow = async (configFile = './src/workflow.json', dryRunMode) => {
     \ncollection deposit: ${collectionDepositStr} \
     \nitems deposit: ${itemsDepositStr} \
     \nmetadata deposit: ${metadataDepositStr} \
-    \ninitial funds: ${initalFundsStr} \
+    ${!withPresetAddress ? `\ninitial funds: ${initalFundsStr} `:''}\
     \n----------------------------- \
     \ntotal cost: ${totalCostStr} \
     \nAccount Balance: ${usableBalanceStr} \
@@ -1033,9 +1054,15 @@ const runWorkflow = async (configFile = './src/workflow.json', dryRunMode) => {
   console.info(stepTitle`\n\nSetting collection metadata ...`);
   await setCollectionMetadata(config);
 
-  // 3 - generate secrets
-  console.info(stepTitle`\n\nGenerating gift secrets ...`);
-  await generateGiftSecrets(config);
+  if (!withPresetAddress) {
+    // 3 - generate secrets
+    console.info(stepTitle`\n\nGenerating gift secrets ...`);
+    await generateGiftSecrets(config);
+  } else {
+    // 3 - load receivers
+    console.info(stepTitle`\n\nLoading item receivers ...`);
+    await loadReceivers(config);
+  }
 
   // 4 - mint items in batch
   console.info(stepTitle`\n\nMinting nft items ...`);
@@ -1049,9 +1076,11 @@ const runWorkflow = async (configFile = './src/workflow.json', dryRunMode) => {
   console.info(stepTitle`\n\nSetting the item metadata on chain ...`);
   await setItemsMetadata(config);
 
-  // 7 - fund gift accounts with the initialFund amount.
-  console.info(stepTitle`\n\nSeeding the accounts with initial funds ...`);
-  await sendInitialFunds(config);
+  if (!withPresetAddress) {
+    // 7 - fund gift accounts with the initialFund amount.
+    console.info(stepTitle`\n\nSeeding the accounts with initial funds ...`);
+    await sendInitialFunds(config);
+  }
 
   if (!dryRunMode) {
     // move the final data file to the output path, cleanup the checkpoint files.

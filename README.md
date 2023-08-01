@@ -92,9 +92,19 @@ uniqcamp run --dry-run <path to workflow.json>
 
 After the minting process is complete a final `.csv` data file will be generated at the same path as input datafile (specified by `item.data.csvFile`), This final data file will include the gift secret codes as well some more information.
 
+### Minting to a known address list
+
+For cases when we don't want to generate and pre-fund new accounts, there is an option to mint to a predetermined receivers list.
+
+```
+uniqcamp run --with-preset-address <path to workflow.json>
+or
+npm run uniqcamp -- run --with-preset-address <path to workflow.json>
+```
+
 ### Setting or changing the item metadata
 
-In some cases, it might be needed to set or change the matadata for the items after the collection items are minted. For those cases, the cli also provides an `update-metadata` subcommand. This subcommand is very similar to the `run` subcommand as it also takes the path to a workflow .json file as argument, but unlike the `run` subcommand that goes through the whole workflow, `update-metadata` only sets the metadata based on the information specified in the workflow, assuming the collection and items are already created.
+In some cases, it might be needed to set or change the metadata for the items after the collection items are minted. For those cases, the cli also provides an `update-metadata` subcommand. This subcommand is very similar to the `run` subcommand as it also takes the path to a workflow .json file as argument, but unlike the `run` subcommand that goes through the whole workflow, `update-metadata` only sets the metadata based on the information specified in the workflow, assuming the collection and items are already created.
 
 ### burn-reap
 
