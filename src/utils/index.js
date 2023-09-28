@@ -1,4 +1,5 @@
 const { formatBalance } = require('@polkadot/util');
+
 const isNumber = (val) => !isNaN(val) && !isNaN(parseInt(val));
 
 const isEmptyObject = (obj) => {

@@ -33,7 +33,7 @@ const client = {
       //let pinResult = await this.pinata.pinFromFS(sourcePath, options);
       cid = pinResult?.IpfsHash;
       cache.set(sourcePath, cid);
-      console.log(`uploaded file ${sourcePath}, cid:${cid}.`);
+      console.log(`uploaded file ${sourcePath}, cid:${cid}, name:${name}`);
     }
     return cid;
   },

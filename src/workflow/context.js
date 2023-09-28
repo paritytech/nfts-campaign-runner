@@ -3,6 +3,7 @@ const inquirer = require('inquirer');
 const path = require('path');
 const { connect } = require('../chain/chain');
 const { createPinataClient } = require('../pinata/pinataClient');
+const { isNumber } = require('../utils');
 const {
   writeCsvSync,
   readCsvSync,
@@ -105,6 +106,10 @@ const context = {
     isExistingCollection: false,
     metaCid: undefined,
     load: async function (wfConfig, network) {
+      if (isNumber(wfConfig.collection?.startItemId)) {
+        this.startItemId = Number(wfConfig.collection.startItemId);
+      }
+
       let { header, records } = getCheckpointRecords(cpfiles.collection) || {};
       if (header) {
         let [collectionIdIdx, collectionMetaIdx, startItemIdx, isExistingCollectionIdx] =
@@ -154,6 +159,9 @@ const context = {
           } else {
             this.id = cfgCollectionId;
             this.startItemId = Number(storageCollection?.items);
+            if (isNumber(wfConfig.collection?.startItemId)) {
+              this.startItemId += Number(wfConfig.collection.startItemId);
+            }
             this.isExistingCollection = true;
             // set the start item id to the last id available in the collection assuming all items are minted from 0 to number of current items.
             console.log(

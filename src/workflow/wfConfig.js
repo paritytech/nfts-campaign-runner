@@ -83,7 +83,13 @@ const parseConfig = (cfile) => {
     if (!isEmptyObject(itemMetadata)) {
       if (itemMetadata.imageFile) {
         const parts = itemMetadata.imageFile.split('/');
-        const imageFileNameTemplate = parts.pop();
+        let imageFileNameTemplate = parts.pop();
+
+        // support the template data in the last folder's name, e.g. "some_path/<<Column1>>_<<Column2>>/<<File name>>";
+        const [last] = parts.slice(-1);
+        if (last.includes('<<') &&last.includes('>>')) {
+          imageFileNameTemplate = `${parts.pop()}/${imageFileNameTemplate}`;
+        }
         const imageFolder = parts.join('/');
 
         configJson.item.metadata.imageFolder = path.resolve(imageFolder);
@@ -111,8 +117,11 @@ const parseConfig = (cfile) => {
         );
       }
 
+      if (itemMetadata.attributes && (!Array.isArray(itemMetadata.attributes) || !itemMetadata.attributes.length)) {
+        delete configJson.item.metadata.attributes;
+      }
+
       validateElement(configJson, 'item.metadata.name', configFile);
-      validateElement(configJson, 'item.metadata.description', configFile);
     }
   } catch (error) {
     return { error: error.message ?? error.toString() };

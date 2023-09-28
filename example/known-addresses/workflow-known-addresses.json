@@ -1,6 +1,6 @@
 {
   "network": {
-    "provider": "wss://statemine-rpc.polkadot.io",
+    "provider": "wss://polkadot-asset-hub-rpc.polkadot.io",
     "accountSeed": "<account seed>",
     "proxiedAddress": "<in case the account is a proxy the address of the proxied/primary account>"
   },
