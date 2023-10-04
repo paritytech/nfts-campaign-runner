@@ -1,7 +1,7 @@
 # nfts-campaign-runner
 
-A cli tool to automate running NFT campaign workflows on substrate-nfts-pallet in bulk.  
-The cli tool works in combination with [nft gift app](https://github.com/hamidra/dotdrop/tree/polkadot-nft) to mint NFTs in bulk and creates NFT gift secret codes which can be claimed using the [nft claim apps](https://claimnft.kusama.network).
+This CLI tool allows to mint NFTs in bulk and creates NFT gift secret codes which can be claimed using the [NFTs claim app](https://github.com/paritytech/claim-nft) 
+on [Kusama](https://claimnft.kusama.network) or [Polkadot](https://claimnft.polkadot.network).
 
 ## Install
 
@@ -9,14 +9,14 @@ To install the tool, clone this repo:
 
 ```bash
 # Clone the repository
-> git clone https://github.com/paritytech/uniques-campaign-runner.git
-> cd uniques-campaign-runner
+git clone https://github.com/paritytech/nfts-campaign-runner.git
+cd nfts-campaign-runner
 ```
 
 and install the npm package from the project directory.
 
 ```bash
-> npm install -g .
+npm install -g .
 ```
 
 ## Define a workflow
@@ -26,7 +26,7 @@ To define a workflow you need to provide the cli with a workflow `.json` file wh
 ```json
 {
   "network": {
-    "provider": "<provider e.g. wss://statemine-rpc.polkadot.io>",
+    "provider": "<provider e.g. wss://polkadot-asset-hub-rpc.polkadot.io>",
     "accountSeed": "<the minter/admin account seed>",
     "proxiedAddress": "<in case the account is a proxy for another account, the address of the proxied/primary account>"
   },
@@ -36,6 +36,7 @@ To define a workflow you need to provide the cli with a workflow `.json` file wh
   },
   "collection": {
     "id": "<leave an empty string to create a new collection or put the collection's id to continue minting into that collection>",
+    "startItemId": 0,
     "metadata": {
       "imageFile": "<Path to the image file that is used for collection metadata>",
       "videoFile": "<Path to the video file that is used for collection metadata>",
@@ -68,7 +69,7 @@ Note:
 - If the calculated row numbers fall outside of the number of rows in the csv file (e.x. `offset+count-1 > last_row_number_in_the_file`) the minting will stop after the last row number.
 - The `item.metadata.imageFile` specifies the file path that contains the media file that is going to be minted.
 - The `item.metadata.videoFile` specifies the file path that contains the video file that is going to be minted. Has the same naming format as `item.metadata.imageFile`.
-- the values surrounded by `<<` and `>>` will be filled from the collumns of the data `.csv` file. e.g. fo the
+- the values surrounded by `<<` and `>>` will be filled from the columns of the data `.csv` file. e.g. for the
   path example: `/Users/user/nfts/<<image name>>.png` the `<<image name>>` will be replaced with the value from the "image name" column for each row in the csv datafile.
   Additionally, you can use an empty template: `/Users/user/nfts/<<>>.png` in which the `<<>>` will be replaced with the row numbers for each row.
 

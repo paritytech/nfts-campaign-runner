@@ -39,7 +39,7 @@ program
 program
   .command('rename-files')
   .description(
-    'Rename the files in the src path to an inceremental index starting from the start-index. Saves the renamed files in the destination output path.'
+    'Rename the files in the src path to an incremental index starting from the start-index. Saves the renamed files in the destination output path.'
   )
   .option(
     '--start-index <start-index>',

@@ -10,7 +10,7 @@
   },
   "collection": {
     "id": "",
-    "append": "no",
+    "startItemId": 0,
     "metadata": {
       "imageFile": "",
       "videoFile": "",

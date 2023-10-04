@@ -145,7 +145,7 @@ const setCollectionMetadata = async (wfConfig) => {
       }
     } else {
       let metadataFolder = wfConfig.metadataFolder;
-      let metadataFile = path.join(metadataFolder, 'collection.meta');
+      let metadataFile = path.join(metadataFolder, `collection-${context.collection.id}.json`);
       context.collection.metaCid = await generateAndSetCollectionMetadata(
         context.network,
         context.pinataClient,
@@ -332,14 +332,21 @@ const pinAndSetImageCid = async (wfConfig) => {
     imageFileNameTemplate,
     videoFolder,
     videoFileNameTemplate,
+    attributes,
   } = itemMetadata;
 
-  const [imageCidColumn, metaCidColumn, videoCidColumn] =
+  const [imageCidColumn, metaCidColumn, videoCidColumn, itemIdColumn] =
     context.data.getColumns([
       columnTitles.imageCid,
       columnTitles.metaCid,
       columnTitles.videoCid,
+      columnTitles.itemId,
     ]);
+
+  let itemAttributeColumns;
+  if (attributes) {
+    itemAttributeColumns = context.data.getColumns(attributes);
+  }
 
   // add missing columns
   if (imageCidColumn.records.length === 0) {
@@ -408,16 +415,28 @@ const pinAndSetImageCid = async (wfConfig) => {
         context.data.records[i]
       );
 
-      let metadataName = `row-${rowNumber(i)}.meta`;
+      let metadataName = `item-${context.collection.id}-${itemIdColumn.records[i]}.json`;
       let metadataFolder = wfConfig.metadataFolder;
       let metaPath = path.join(metadataFolder, metadataName);
+
+      let itemAttributes;
+      if (attributes && itemAttributeColumns) {
+        itemAttributes = itemAttributeColumns
+          .filter(attributeColumn => !!attributeColumn.records[i])
+          .map(attributeColumn => ({
+            trait_type: attributeColumn.title,
+            value: attributeColumn.records[i]
+          }));
+      }
+
       const { metaCid, imageCid, videoCid } = await generateMetadata(
         context.pinataClient,
         itemName,
         itemDescription,
         imageFile,
         videoFile,
-        metaPath
+        metaPath,
+        itemAttributes
       );
 
       imageCidColumn.records[i] = imageCid;
@@ -433,13 +452,13 @@ const pinAndSetImageCid = async (wfConfig) => {
     }
   };
 
-  let batchCheckpointCb = async (
+  const batchCheckpointCb = async (
     batchStartRecordNo,
     batchEndRecordNo,
     batchNo
   ) => {
     if (!dryRun) {
-      // set data checkpiont
+      // set data checkpoint
       context.data.checkpoint();
 
       // set checkpoint batch
@@ -473,7 +492,7 @@ const setItemsMetadata = async (wfConfig) => {
   // read collectionId from checkpoint
   if (context.collection.id === undefined) {
     throw new WorkflowError(
-      'No collectionId checkpoint is recorded or the checkpoint is not in correct state'
+      'No collection.id checkpoint is recorded or the checkpoint is not in correct state'
     );
   }
 
@@ -537,7 +556,7 @@ const setItemsMetadata = async (wfConfig) => {
     batchNo
   ) => {
     if (!dryRun) {
-      // set data checkpiont
+      // set data checkpoint
       context.data.checkpoint();
 
       // set checkpoint batch
@@ -561,7 +580,7 @@ const sendInitialFunds = async (wfConfig) => {
   // calculate minimum initial fund
   const minInitialFund = await calcMinInitialFund();
 
-  // check the value of  the configured initialFund is valid and above the minimum needed funds to claim
+  // check the value of the configured initialFund is valid and above the minimum needed funds to claim
   if (
     !initialFund?.match(initialFundPattern) ||
     minInitialFund.lte(new BN(initialFund))
@@ -728,7 +747,7 @@ const burnUnclaimedInBatch = async (wfConfig) => {
   // read collectionId from checkpoint
   if (context.collection.id === undefined) {
     throw new WorkflowError(
-      'No collectionId is loaded in context. Either the collectionId is not specified in the workflow file or the checkpoint is not in correct state.'
+      'No collection.id is loaded in context. Either the collectionId is not specified in the workflow file or the checkpoint is not in correct state.'
     );
   }
   const collectionId = context.collection.id;
@@ -925,13 +944,13 @@ const calculateCost = async (wfConfig) => {
   }
   if (wfConfig['item']['metadata']) {
     metadataCount +=
-      itemCount - context.batch.lastMetadataBatch * wfConfig.item.batchSize;
+      itemCount - (context.batch.lastMetadataBatch * wfConfig.item.batchSize);
   }
 
   let minInitialFund = await calcMinInitialFund();
   let totalCollectionDeposit = collectionDeposit.muln(collectionCount);
   let totalInitialFunds = minInitialFund.muln(
-    itemCount - context.batch.lastBalanceTxBatch * wfConfig.item.batchSize
+    itemCount - (context.batch.lastBalanceTxBatch * wfConfig.item.batchSize)
   );
   let totalItemDeposit = itemDeposit.muln(itemCount);
   let totalMetadataDeposit = metadataDeposit.muln(metadataCount);
@@ -978,7 +997,7 @@ const runWorkflow = async (configFile = './src/workflow.json', dryRunMode, withP
     totalCost = totalCost.add(totalInitialFunds);
   }
 
-  let initalFundsStr = formatBalanceWithUnit(totalInitialFunds, chainInfo);
+  let initialFundsStr = formatBalanceWithUnit(totalInitialFunds, chainInfo);
   let collectionDepositStr = formatBalanceWithUnit(
     totalCollectionDeposit,
     chainInfo
@@ -1000,11 +1019,11 @@ const runWorkflow = async (configFile = './src/workflow.json', dryRunMode, withP
 
   console.info(
     `\
-    \nThe cost of running the remaining workflow is : \
+    \nThe cost of running the remaining workflow is: \
     \ncollection deposit: ${collectionDepositStr} \
     \nitems deposit: ${itemsDepositStr} \
     \nmetadata deposit: ${metadataDepositStr} \
-    ${!withPresetAddress ? `\ninitial funds: ${initalFundsStr} `:''}\
+    ${!withPresetAddress ? `\ninitial funds: ${initialFundsStr} `:''}\
     \n----------------------------- \
     \ntotal cost: ${totalCostStr} \
     \nAccount Balance: ${usableBalanceStr} \
@@ -1129,9 +1148,6 @@ const updateMetadata = async (
   // 1 - skip collection creation
   // since we're just updating the metadata, the collection should already exist, otherwise the update must fail
 
-  // load collectionId from config:
-  context.collection.id = config.collection.id;
-
   // 2 - set collectionMetadata
   console.info(stepTitle`\n\nSetting collection metadata ...`);
   await setCollectionMetadata(config);
@@ -1209,9 +1225,6 @@ const burnAndReap = async (configFile = './src/workflow.json', dryRunMode) => {
   // 1 - skip collection creation
   // since we want to burn and reap the accounts, we assume the collection is set in the workflow and is already created,
   // otherwise we throw an error.
-
-  // load collectionId from config:
-  context.collection.id = config.collection.id;
 
   // 2 - burn unclaimed items
   console.info(stepTitle`\n\nBurning unclaimed items ...`);
