@@ -87,7 +87,7 @@ const parseConfig = (cfile) => {
 
         // support the template data in the last folder's name, e.g. "some_path/<<Column1>>_<<Column2>>/<<File name>>";
         const [last] = parts.slice(-1);
-        if (last.includes('<<') &&last.includes('>>')) {
+        if (last.includes('<<') && last.includes('>>')) {
           imageFileNameTemplate = `${parts.pop()}/${imageFileNameTemplate}`;
         }
         const imageFolder = parts.join('/');
