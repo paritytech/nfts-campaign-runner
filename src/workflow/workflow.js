@@ -722,7 +722,7 @@ const reapUnusedFunds = async (wfConfig) => {
           );
           continue;
         }
-        let tx = api.tx.balances.transferAll(destAddress, false);
+        let tx = api.tx.balances.transferAllowDeath(destAddress, false);
         txs.push(signAndSendTx(api, tx, sourceKeyPair, false, dryRun));
       }
     }

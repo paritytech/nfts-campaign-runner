@@ -5,7 +5,7 @@ let transferFunds = async (network, owners, amount, dryRun) => {
 
   let txs = [];
   for (let i = 0; i < owners.length; i++) {
-    txs.push(api.tx.balances.transfer(owners[i], amount));
+    txs.push(api.tx.balances.transferAllowDeath(owners[i], amount));
   }
 
   let txBatch = api.tx.utility.batchAll(txs);
